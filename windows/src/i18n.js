@@ -3,6 +3,7 @@
 // stay as they are: preload.js gets the dictionary at boot and rewrites what they show (text, titles, placeholders) as
 // it appears; main.js uses `tr` for the native menus and dialogs. Only whole interface strings are looked up, so chat
 // titles, file names and terminal output pass through untouched.
+// To add a string: put its English text (as the page shows it) in `exact`, or a pattern in `patterns` if it has numbers.
 
 const LANGS = [
   { id: 'tr', name: 'Türkçe' },
