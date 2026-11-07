@@ -1,0 +1,1426 @@
+'use strict';
+
+// Hacker name (asked once, on first launch), the main menu (your profile, settings, your status), friends and messages,
+// the leaderboard, the themes and the notifications (views of the activity bar, git.js), feedback and app updates. Your level and rank (xp.js) show in the top bar and on your profile. Names can repeat: the API gives every Mac a
+// tag (#0427) and name + tag is unique, like Discord. Swift's Cloud talks to the API, pushes its state through
+// window.__radar.cloud and answers the page through the "cloud" handler (with replies).
+window.Cloud = (() => {
+  // The computer and the command key, as this platform names them (the Windows app sets __platform, preload.js).
+  const MACHINE = window.__platform === 'win32' ? 'PC' : 'Mac';
+  const MOD = window.__platform === 'win32' ? 'Ctrl+' : '⌘';
+  const call = (type, payload) => window.webkit.messageHandlers.cloud.postMessage(Object.assign({ type }, payload || {}));
+  const MAX = 16;
+  const ERRORS = {
+    name_full: 'too many hackers use this name · try another',
+    offline: "can't reach the server · try again",
+    unauthorized: `this ${MACHINE} lost its sign-in · restart the app`,
+  };
+  const errorText = (code) => ERRORS[code] || `didn't work (${code})`;
+  // The app moves the chat windows pinned above the dashboard out of the way while a menu is open.
+  const tellModal = (open) => {
+    try {
+      window.webkit.messageHandlers.radar.postMessage({ type: 'modal', open });
+    } catch {}
+  };
+  const tagText = (t) => (t ? `#${String(t).padStart(4, '0')}` : '');
+  // A download arrow over a tray; while an update downloads, the arrow keeps dropping into the tray.
+  // A speech bubble: the feedback window's title.
+  const BUBBLE = '<svg viewBox="0 0 24 24"><path d="M5 4.5h14a2 2 0 0 1 2 2V15a2 2 0 0 1-2 2h-7.5L6.5 21v-4H5a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2z"/><circle cx="8.2" cy="10.8" r="1.1"/><circle cx="12" cy="10.8" r="1.1"/><circle cx="15.8" cy="10.8" r="1.1"/></svg>';
+  const ARROW = '<svg viewBox="0 0 16 16"><path class="ar" d="M8 2.5v7.5M4.6 6.8 8 10.2l3.4-3.4"/><path d="M3 13.5h10"/></svg>';
+
+  let S = null; // latest state
+  let modal = null; // 'first' | 'menu' | 'update' | 'feedback'
+  let tab = 'friends';
+  let shownError = null;
+  let shownNameError = null;
+  let waitFor = null; // { test, then, until }: runs once a state shows the name just sent
+  let feedbackDraft = ''; // the feedback window's text, kept until it's sent
+
+  const root = document.createElement('div');
+  root.id = 'cloudui';
+  document.body.appendChild(root);
+  const q = (sel) => root.querySelector(sel);
+  const brand = document.querySelector('.brand');
+  const stack = brand.querySelector('.stack');
+  // The logo shows your status. Unread messages and friend requests count on the friends icon on the left edge.
+  brand.insertAdjacentHTML('afterbegin', '<i class="pdot bme" hidden></i>');
+
+  function render(s) {
+    if (!s) return;
+    S = s;
+    // Long names get tighter letters so the top bar still fits. Over the name: your rank and level once the API told
+    // them; under it, how far into the level you are.
+    const long = s.hackerName && s.hackerName.length > 11 ? ' class="long"' : '';
+    const x = s.xp, r = x && Xp.rank(x.level);
+    const title = r ? `<small class="rk" style="--rc:${r.color}">${esc(r.name.toUpperCase())} · LV ${x.level}</small>` : '<small>HACKER</small>';
+    const bar = r ? `<i class="xpb" style="--rc:${r.color}"><i style="width:${Xp.pct(x).toFixed(1)}%"></i></i>` : '';
+    setHTML(stack, s.hackerName ? `${title}<b${long}>${esc(s.hackerName)}<i class="htag">${tagText(s.tag)}</i></b>${bar}` : "<small>VOX</small><b>PILOT</b>");
+    brand.title = r
+      ? `Level ${x.level} · ${r.name} · ${x.to ? `${Xp.num(x.xp - x.from)} / ${Xp.num(x.to - x.from)} XP` : `${Xp.num(x.xp)} XP`} · today ${Xp.dur(x.today)}`
+      : 'Profile and settings';
+    if (waitFor && (Date.now() > waitFor.until || waitFor.test(s))) {
+      const w = waitFor;
+      waitFor = null;
+      if (w.test(s)) w.then(s);
+    }
+    renderUpdate();
+    renderUpdateModal();
+    if (s.updateError && s.updateError !== shownError) {
+      toast(s.updateError === 'not_writable' ? "can't replace the app where it is · move it to Applications" : 'update failed · try again later');
+    }
+    shownError = s.updateError;
+    // A name picked offline that the API refused once it was back.
+    if (s.nameError && s.nameError !== shownNameError) {
+      toast(s.nameError === 'name_full' ? "couldn't save your new name · too many hackers use it" : "couldn't save your new name");
+    }
+    shownNameError = s.nameError;
+    if (s.reachable && s.registered === false) openFirst();
+    else if (modal === 'first' && s.registered) close();
+    if (modal === 'menu') {
+      renderInfo();
+      renderProfile();
+      renderActivity();
+    }
+    // Friends and messages need a signed-in Mac.
+    if (s.registered && s.reachable && !Social.state()) Social.load();
+    badges();
+  }
+
+  // How much of the update has downloaded, " 42%" (nothing when it isn't downloading).
+  const pct = () => (S.updateProgress == null ? '' : ` ${Math.round(S.updateProgress * 100)}%`);
+  function renderUpdate() {
+    const b = $('update');
+    const busy = !!S.updating;
+    b.hidden = !(S.update || busy);
+    b.disabled = busy;
+    b.classList.toggle('busy', busy);
+    // A day after a newer version came out, an older one earns no XP (the API): the button says so.
+    b.classList.toggle('paused', !busy && !!S.xpPaused);
+    // Short label so the top bar fits; the version and progress are in the tooltip and in settings.
+    setHTML(b, `${ARROW}<span>${busy ? `updating${pct() || '…'}` : S.xpPaused ? 'update · XP paused' : 'update'}</span>`);
+    b.title = busy
+      ? S.updating + pct()
+      : S.update
+        ? S.xpPaused
+          ? `Version ${S.update.version} is out · XP is paused until you update · click to see what's new`
+          : S.updateReady
+            ? `Version ${S.update.version} is ready · it installs when you step away, your chats keep running · click to see what's new`
+            : `Version ${S.update.version} is out · click to see what's new`
+        : '';
+  }
+
+  async function update() {
+    if (!S || !S.update || S.updating) return;
+    const r = await call('update').catch(() => ({ error: 'offline' }));
+    if (r && r.error) toast(errorText(r.error));
+  }
+
+  // ---------- what's new, then install ----------
+  // The top bar's update button, the settings row and the "update available" notice open this first: the new version
+  // and what changed in it (the release notes, a line each), so nobody restarts the app without knowing why.
+  const noteLines = (notes) =>
+    String(notes || '')
+      .split(/\n+/)
+      .map((l) => l.replace(/^\s*[-•*]\s*/, '').trim())
+      .filter(Boolean);
+  // Release notes and the developer's notifications, escaped, with their links and GitHub names marked: a link opens in
+  // the browser (the app sends every web link the page follows there, Mac and Windows), @name is that GitHub user and
+  // opens their profile.
+  function richText(text) {
+    const s = String(text ?? '');
+    const re = /(https?:\/\/[^\s<>"'`]+)|(^|[^\w@./-])@([A-Za-z0-9](?:-?[A-Za-z0-9]){0,38})(?![\w-])/g;
+    let out = '', last = 0, m;
+    while ((m = re.exec(s))) {
+      if (m[1]) {
+        // The sentence's punctuation isn't part of the link, nor a ")" opened before it.
+        let url = m[1];
+        for (;;) {
+          if (/[.,;:!?'"\]]$/.test(url)) url = url.slice(0, -1);
+          else if (url.endsWith(')') && url.split('(').length < url.split(')').length) url = url.slice(0, -1);
+          else break;
+        }
+        try { new URL(url); } catch { continue; }
+        out += esc(s.slice(last, m.index)) + `<a class="rt-link" href="${esc(url)}" title="${esc(url)}">${esc(url)}</a>`;
+        last = re.lastIndex = m.index + url.length;
+      } else {
+        const name = m[3];
+        out += esc(s.slice(last, m.index) + m[2]) +
+          `<a class="rt-user" href="https://github.com/${name}" title="github.com/${name}">@${name}</a>`;
+        last = re.lastIndex;
+      }
+    }
+    return out + esc(s.slice(last));
+  }
+  function openUpdate() {
+    if (!S || !S.update || modal === 'first' || modal === 'update') return;
+    const u = S.update, lines = noteLines(u.notes);
+    modal = 'update';
+    tellModal(true);
+    root.className = 'on';
+    root.innerHTML = `
+      <div class="pk hk upd crt-on">
+        <div class="pk-border"></div>
+        <div class="pk-title"><img class="hk-logo" src="logo.png" alt=""><b>UPDATE AVAILABLE</b><span class="for">${esc(S.version || '?')} → ${esc(u.version)}</span></div>
+        <div class="hk-body">
+          <div class="hk-h">WHAT'S NEW IN ${esc(u.version)}</div>
+          <ul class="up-notes">${(lines.length ? lines : ['fixes and improvements']).map((l) => `<li>${richText(l)}</li>`).join('')}</ul>
+          <div class="up-bar" hidden><i></i></div>
+          <p class="hk-status up-status"></p>
+        </div>
+        <div class="pk-foot"><span class="pk-sel note">restarts the app · chats keep running</span><button class="pk-cancel">later</button><button class="pk-ok up-go">update now</button></div>
+      </div>`;
+    q('.pk-cancel').onclick = close;
+    q('.up-go').onclick = update;
+    root.onmousedown = (e) => {
+      if (e.target === root && !S.updating) close();
+    };
+    renderUpdateModal();
+  }
+  // While it downloads and installs: the progress, and no way out (the app restarts at the end).
+  function renderUpdateModal() {
+    if (modal !== 'update') return;
+    const busy = !!S.updating;
+    if (!busy && !S.update) return close();
+    const go = q('.up-go'), st = q('.up-status');
+    go.disabled = q('.pk-cancel').disabled = busy;
+    go.textContent = busy ? 'updating…' : 'update now';
+    st.className = `hk-status up-status${busy ? ' ok' : ''}`;
+    st.textContent = busy ? S.updating + pct() : '';
+    // The download as a bar, so a long one never looks frozen.
+    const bar = q('.up-bar');
+    bar.hidden = !(busy && S.updateProgress != null);
+    bar.firstElementChild.style.width = `${Math.round((S.updateProgress || 0) * 100)}%`;
+  }
+
+  // The name's state reaches the page as a push from the app, before or after the call's reply.
+  function whenState(test, then) {
+    if (S && test(S)) then(S);
+    else waitFor = { test, then, until: Date.now() + 10_000 };
+  }
+
+  // ---------- name field: live counter, allowed characters ----------
+  function nameField(box, own, onReady) {
+    const $$ = (sel) => box.querySelector(sel);
+    const input = $$('.hk-input'), count = $$('.hk-count'), status = $$('.hk-status'), field = $$('.hk-field'), hint = $$('.hk-hint');
+    const set = (cls, msg) => {
+      status.className = `hk-status ${cls}`;
+      status.textContent = msg;
+    };
+    const nudge = () => {
+      field.classList.remove('shake');
+      void field.offsetWidth;
+      field.classList.add('shake');
+      if (hint) {
+        hint.classList.add('flash');
+        setTimeout(() => hint.classList.remove('flash'), 900);
+      }
+    };
+    function check() {
+      const v = input.value, name = v.trim();
+      count.textContent = `${v.length}/${MAX}`;
+      count.classList.toggle('full', v.length >= MAX);
+      // Settings: the input is as wide as the name, so the tag sits right after it.
+      input.style.setProperty('--n', v.length || input.placeholder.length);
+      set('', '');
+      onReady(name.length >= 2 && name !== own);
+    }
+    // Letters, digits, _ . - and single spaces between words (a trailing one is fine while typing; it's trimmed).
+    input.addEventListener('input', () => {
+      const v = input.value;
+      const clean = v.replace(/[^A-Za-z0-9_. -]/g, '').replace(/ {2,}/g, ' ').replace(/^ /, '').slice(0, MAX);
+      if (clean !== v) {
+        const at = Math.max(0, (input.selectionStart || 0) - (v.length - clean.length));
+        input.value = clean;
+        input.setSelectionRange(at, at);
+        nudge();
+      }
+      check();
+    });
+    check();
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 80);
+    return { input, set, nudge };
+  }
+
+  // Sends the name; on success the new state arrives (pushed by the app) and closes the dialog.
+  // Offline, the app keeps the name and sends it when the API answers again ("queued").
+  function submitter(type, f, ok, done) {
+    return async () => {
+      if (ok.disabled) return f.nudge();
+      const name = f.input.value.trim();
+      ok.disabled = true;
+      f.set('wait', type === 'register' ? 'registering' : 'saving');
+      const r = await call(type, { name }).catch(() => ({ error: 'offline' }));
+      if (r.error) {
+        f.set('bad', errorText(r.error));
+        ok.disabled = r.error !== 'offline';
+        return f.nudge();
+      }
+      if (r.queued) {
+        toast(`saved on this ${MACHINE} · syncs when you're back online`);
+        return close();
+      }
+      done(name);
+    };
+  }
+
+  // ---------- first launch ----------
+  function openFirst() {
+    if (modal === 'first') return;
+    modal = 'first';
+    tellModal(true);
+    root.className = 'on first';
+    root.innerHTML = `
+      <div class="pk hk crt-on">
+        <div class="pk-border"></div>
+        <div class="pk-title"><img class="hk-logo" src="logo.png" alt=""><b>NEW OPERATOR</b><span class="for">first launch</span></div>
+        <div class="hk-body">
+          <p class="hk-line dim" style="--n:18;--d:0.25s"><span>&gt; link established</span></p>
+          <p class="hk-line" style="--n:29;--d:0.95s"><span>&gt; identify yourself, hacker_</span></p>
+          <label class="hk-field"><span class="hk-prompt">$</span><input class="hk-input" maxlength="${MAX}" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="hacker name"><span class="hk-count"></span></label>
+          <p class="hk-status"></p>
+          <p class="hk-hint">2–${MAX} characters · letters, digits, spaces, _ . - · plus a #tag</p>
+        </div>
+        <div class="pk-foot"><span class="pk-sel note">no signup · tied to this ${MACHINE}</span><button class="pk-ok" disabled>enter ⏎</button></div>
+      </div>`;
+    const ok = q('.pk-ok');
+    const f = nameField(root, null, (ready) => (ok.disabled = !ready));
+    const submit = submitter('register', f, ok, (name) =>
+      whenState((s) => s.registered && s.hackerName === name, (s) => toast(`welcome, ${s.hackerName}${tagText(s.tag)}`)),
+    );
+    ok.onclick = submit;
+    f.input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submit();
+    });
+  }
+
+  // ---------- main menu: friends, requests, settings ----------
+  // Opened by the logo (top left) or the gear. The title bar carries your name#tag and your status.
+  function openMenu(which) {
+    if (!S) return;
+    if (modal === 'menu') return showTab(which || tab);
+    if (modal) return;
+    modal = 'menu';
+    tellModal(true);
+    root.className = 'on';
+    root.innerHTML = `
+      <div class="mn-wrap"><div class="pk hk menu crt-on">
+        <div class="pk-border"></div>
+        <div class="pk-title"><span class="lights"><i class="l-close" title="Close"></i><i class="l-min"></i><i class="l-max"></i></span><img class="hk-logo" src="logo.png" alt=""><b>MAIN MENU</b>
+          <span class="mn-me"><span class="mn-handle"></span><button class="mn-copy" type="button" title="Copy your name#tag, so friends can add you">⧉</button><button class="mn-status" type="button" title="Your status"></button></span></div>
+        <div class="mn-tabs">
+          <button type="button" data-tab="profile">PROFILE</button>
+          <button type="button" data-tab="settings">SETTINGS</button>
+          ${KEYS ? '<button type="button" data-tab="keys">SHORTCUTS</button>' : ''}
+        </div>
+        <div class="mn-body">
+          <section class="mn-page mn-profile" data-page="profile"></section>
+          <section class="mn-page mn-settings" data-page="settings">
+            <div class="hk-h">HACKER NAME</div>
+            <label class="hk-field"><span class="hk-prompt">$</span><input class="hk-input fit" maxlength="${MAX}" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="hacker name"><span class="hk-tag" title="Your tag: names can repeat, name + tag can't">${tagText(S.tag)}</span><span class="hk-count"></span></label>
+            <p class="hk-status"></p>
+            <div class="hk-h">ACTIVITY</div>
+            <div class="hk-row"><span>show my active time to friends<small>today, this week and in total · your level shows either way</small></span>
+              <button type="button" class="hk-sw act" role="switch" aria-checked="true" title="Show my active time to friends"><i></i></button></div>
+            <div class="hk-row"><span>show my name on the leaderboard<small>off: you keep your place as Anonymous, and nobody can add you from there</small></span>
+              <button type="button" class="hk-sw brd" role="switch" aria-checked="true" title="Show my name on the leaderboard"><i></i></button></div>
+            ${UI ? `<div class="hk-h">INTERFACE</div>
+            <div class="hk-row"><span>language<small>the interface's language · the app restarts, your chats keep running</small></span><span class="lb-seg ui-seg ui-lang"></span></div>
+            <div class="hk-row"><span>font<small>the dashboard's and the messages' text</small></span><span class="lb-seg ui-seg ui-font"></span></div>
+            <div class="hk-row"><span>text size<small>the dashboard, larger for text too small to read</small></span><span class="lb-seg ui-seg ui-scale"></span></div>
+            <div class="hk-row"><span>AI tools in the theme's colours<small>Claude Code, Codex and Antigravity draw in the terminal's colours, so a theme recolours their text too · from their next session</small></span>
+              <button type="button" class="hk-sw ui-ai" role="switch" aria-checked="true" title="AI tools in the theme's colours"><i></i></button></div>
+            <div class="hk-row"><span>Claude limits in the top bar<small>the 5-hour and weekly limits · adds VoxPilot's status line to Claude Code's settings.json, your own status line still runs through it</small></span>
+              <button type="button" class="hk-sw ui-lim" role="switch" aria-checked="false" title="Claude limits in the top bar"><i></i></button></div>` : ''}
+            ${SAVERS ? `<div class="hk-h">TOKEN SAVERS</div>
+            <div class="hk-row ts-row"><span>rtk · shorter command output for Claude Code, Codex and Antigravity<small class="ts-note" data-which="rtk">…</small></span>
+              <button type="button" class="hk-sw ts" data-which="rtk" role="switch" aria-checked="false" title="Turn rtk on or off"><i></i></button></div>
+            <div class="hk-row ts-row"><span>caveman · short answers from Claude Code, Codex and Antigravity<small class="ts-note" data-which="caveman">…</small></span>
+              <button type="button" class="hk-sw ts" data-which="caveman" role="switch" aria-checked="false" title="Turn caveman on or off"><i></i></button></div>` : ''}
+            ${ARCHIVE() ? `<div class="hk-h">CHATS</div>
+            <div class="hk-row"><span>archived chats<small>out of the chats list · they show only when you open them here</small></span>
+              <button type="button" class="arc-btn arc-open">manage</button></div>` : ''}
+            <div class="hk-h">APP</div>
+            <div class="hk-info"></div>
+          </section>
+          ${KEYS ? '<section class="mn-page mn-keys" data-page="keys"></section>' : ''}
+        </div>
+        <div class="pk-foot"><span class="pk-sel note">esc to close</span><button class="pk-cancel">close</button><button class="pk-ok mn-save" disabled>save name</button></div>
+      </div></div>`;
+
+    // settings: the hacker name
+    const settings = q('.mn-settings');
+    settings.querySelector('.arc-open')?.addEventListener('click', openArchive);
+    const own = S.hackerName || '';
+    settings.querySelector('.hk-input').value = own;
+    const ok = q('.mn-save');
+    const f = nameField(settings, own, (ready) => (ok.disabled = !ready));
+    const submit = submitter('rename', f, ok, (name) => {
+      whenState((s) => s.hackerName === name, (s) => toast(`you are ${s.hackerName}${tagText(s.tag)} now`));
+      close();
+    });
+    ok.onclick = submit;
+    f.input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submit();
+    });
+
+    q('.hk-sw.act').onclick = toggleActivity;
+    q('.hk-sw.brd').onclick = toggleBoard;
+    q('.mn-copy').onclick = () => copyHandle();
+    q('.mn-status').onclick = (e) => {
+      e.stopPropagation();
+      statusMenu();
+    };
+    root.querySelectorAll('.mn-tabs button').forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
+    q('.l-close').onclick = close;
+    q('.pk-cancel').onclick = close;
+    root.onmousedown = (e) => {
+      if (e.target === root) close();
+      else if (!e.target.closest('.mn-pick, .mn-status')) q('.mn-pick')?.remove();
+    };
+    showTab(which || 'profile');
+    renderInfo();
+    renderProfile();
+    renderActivity();
+    renderSocial();
+    // Whatever changed while you weren't looking (a missed live event, another device) shows when the menu opens.
+    Social.load();
+  }
+
+  // ---------- feedback: its own window over the main menu, opened by the speech bubble beside it ----------
+  // Goes straight to the developer with who sent it and when, no e-mail; ⌘↩ sends, esc goes back to the menu. Up to
+  // 4000 characters (the API and the database hold the same limit); the count shows once it's close.
+  const FEEDBACK_MAX = 4000;
+  // Feedback (the activity bar's foot): a window of its own that sends straight to the developer.
+  function openFeedback() {
+    if (modal) return;
+    modal = 'feedback';
+    tellModal(true);
+    root.className = 'on';
+    root.innerHTML = `
+      <div class="pk hk fbk crt-on">
+        <div class="pk-border"></div>
+        <div class="pk-title"><span class="lights"><i class="l-close" title="Close"></i><i class="l-min"></i><i class="l-max"></i></span>${BUBBLE}<b>FEEDBACK</b></div>
+        <div class="hk-body">
+          <label class="hk-field fbk-field"><textarea class="fbk-in" maxlength="${FEEDBACK_MAX}" placeholder="A bug, an idea, something that bothers you…&#10;It goes straight to the developer with your name#tag, no e-mail needed."></textarea></label>
+        </div>
+        <div class="pk-foot"><span class="pk-sel hk-status fbk-status"></span><button class="pk-ok fbk-send" title="${MOD}↩" disabled>send</button></div>
+      </div>`;
+    const $ = (sel) => root.querySelector(sel);
+    const box = $('.fbk-in'), send = $('.fbk-send'), status = $('.fbk-status');
+    const say = (cls, msg) => {
+      status.className = `pk-sel hk-status fbk-status ${cls}`;
+      status.textContent = msg;
+    };
+    const update = () => {
+      const n = box.value.length;
+      send.disabled = !box.value.trim();
+      say(n >= FEEDBACK_MAX ? 'full' : '', n > FEEDBACK_MAX - 400 ? `${n} / ${FEEDBACK_MAX}` : '');
+    };
+    box.value = feedbackDraft;
+    update();
+    box.addEventListener('input', () => {
+      feedbackDraft = box.value;
+      update();
+    });
+    const submit = async () => {
+      const text = box.value.trim();
+      if (!text || send.disabled) return;
+      send.disabled = true;
+      say('wait', 'sending');
+      const r = await Social.feedback(text);
+      if (r.error) {
+        send.disabled = false;
+        return say('bad', errorText(r.error));
+      }
+      feedbackDraft = '';
+      close();
+      toast('feedback sent · thank you, every one is read');
+    };
+    send.onclick = submit;
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        submit();
+      }
+    });
+    $('.l-close').onclick = close;
+    root.onmousedown = (e) => {
+      if (e.target === root) close();
+    };
+    setTimeout(() => box.focus(), 60);
+  }
+
+  const REQUEST_ERRORS = {
+    not_found: 'no hacker with that name#tag',
+    self: "that's you",
+    already_friends: 'you are friends already',
+    already_requested: 'request already sent',
+    bad_handle: 'write it as name#0427',
+    too_many_requests: 'too many requests waiting · cancel some first',
+    signed_out: 'pick a hacker name first',
+  };
+
+  function showTab(which) {
+    tab = which;
+    root.querySelectorAll('.mn-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === which));
+    root.querySelectorAll('.mn-page').forEach((p) => (p.hidden = p.dataset.page !== which));
+    const save = q('.mn-save');
+    if (save) save.hidden = which !== 'settings';
+    const focus = which === 'settings' ? q('.mn-settings .hk-input') : null;
+    if (focus) setTimeout(() => focus.focus(), 60);
+    if (which === 'keys') renderKeys();
+    if (which === 'settings') {
+      renderSaver();
+      renderUI();
+    }
+  }
+
+  // ---------- archived chats ----------
+  // The chats archived from the chats list (the Mac app's Sidebar.swift keeps them) are out of it, and out of Settings
+  // too: as in Claude's and ChatGPT's settings, a button there opens them in a window of their own, by folder, where a
+  // chat, a whole folder or all of them come back with a click. Settings itself shows nothing of them.
+  const ARCHIVE = () => !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.archive);
+  const archiveCall = (msg) => window.webkit.messageHandlers.archive.postMessage(msg);
+  function openArchive() {
+    if (!ARCHIVE()) return;
+    let layer = document.getElementById('arcmodal');
+    if (!layer) {
+      layer = document.createElement('div');
+      layer.id = 'arcmodal';
+      document.body.appendChild(layer);
+    }
+    layer.innerHTML =
+      '<div class="pk hk arc-pk crt-on"><div class="pk-border"></div>' +
+      '<div class="pk-title"><img class="hk-logo" src="logo.png" alt=""><b>ARCHIVED CHATS</b></div>' +
+      '<div class="hk-body"><div class="arc"></div></div>' +
+      '<div class="pk-foot"><span class="pk-sel note">esc to close</span><button type="button" class="pk-cancel arc-close">close</button></div></div>';
+    layer.onmousedown = (e) => e.target === layer && closeArchive();
+    layer.querySelector('.arc-close').onclick = closeArchive;
+    addEventListener('keydown', archiveKey, true);
+    renderArchive();
+  }
+  function closeArchive() {
+    document.getElementById('arcmodal')?.remove();
+    removeEventListener('keydown', archiveKey, true);
+  }
+  // Esc closes this window only, Settings stays under it.
+  function archiveKey(e) {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    e.stopPropagation();
+    closeArchive();
+  }
+  async function renderArchive(r) {
+    const box = document.querySelector('#arcmodal .arc');
+    if (!box) return;
+    if (!r) r = await archiveCall({ type: 'list' }).catch(() => null);
+    const folders = (r && r.folders) || [];
+    const total = folders.reduce((n, f) => n + f.chats.length, 0);
+    box.innerHTML = !total
+      ? '<p class="arc-none">nothing archived · right-click a chat or a folder in the chats list to archive it</p>'
+      : `<div class="arc-head"><span>${total} archived chat${total === 1 ? '' : 's'}</span><button type="button" class="arc-btn" data-act="all">unarchive all</button></div>` +
+        '<div class="arc-list">' +
+        folders.map((f) =>
+          `<div class="arc-folder"><div class="arc-f"><span title="${esc(f.cwd)}">${esc(f.label)}<i>${f.chats.length}</i></span>` +
+          `<button type="button" class="arc-btn" data-act="folder" data-cwd="${esc(f.cwd)}">unarchive folder</button></div>` +
+          f.chats.map((c) => `<div class="arc-c"><span title="${esc(c.title || '')}">${esc(c.title || 'untitled')}</span>` +
+            `<button type="button" class="arc-btn" data-act="chat" data-id="${esc(c.id)}">unarchive</button></div>`).join('') +
+          '</div>').join('') +
+        '</div>';
+    box.onclick = async (e) => {
+      const b = e.target.closest('.arc-btn');
+      if (!b) return;
+      const act = b.dataset.act;
+      const msg = act === 'all' ? { type: 'restoreAll' } : act === 'folder' ? { type: 'restoreFolder', cwd: b.dataset.cwd } : { type: 'restore', id: b.dataset.id };
+      renderArchive(await archiveCall(msg).catch(() => null));
+    };
+  }
+
+  // ---------- the interface's font and text size ----------
+  // Kept by the app (Themes.swift's ThemeStore on the Mac, themes.js on Windows) and set through the theme bridge: the
+  // font goes on every page, the size is the dashboard's zoom.
+  const UI = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.theme);
+  const uiCall = (msg) => window.webkit.messageHandlers.theme.postMessage(msg);
+  function showUI(ui) {
+    const font = q('.ui-font'), scale = q('.ui-scale');
+    if (!ui || !ui.fonts || !font || !scale) return;
+    setHTML(font, ui.fonts.map((f) => `<button type="button" data-font="${esc(f.id)}" class="${f.id === ui.font ? 'on' : ''}">${esc(f.name)}</button>`).join(''));
+    const langEl = q('.ui-lang');
+    if (langEl && ui.langs) setHTML(langEl, ui.langs.map((l) => `<button type="button" data-lang="${esc(l.id)}" class="${l.id === ui.lang ? 'on' : ''}">${esc(l.name)}</button>`).join(''));
+    setHTML(scale, ui.scales.map((x) => `<button type="button" data-scale="${x}" class="${x === ui.scale ? 'on' : ''}">${Math.round(x * 100)}%</button>`).join(''));
+    const ai = q('.ui-ai');
+    if (ai) {
+      ai.setAttribute('aria-checked', ui.aiColors === true ? 'true' : 'false');
+      const lim = q('.ui-lim');
+      if (lim) {
+        lim.setAttribute('aria-checked', ui.limits === true ? 'true' : 'false');
+        lim.disabled = false;
+      }
+      ai.disabled = false;
+    }
+  }
+  async function renderUI() {
+    if (!UI || !q('.ui-font')) return;
+    const langEl = q('.ui-lang');
+    if (langEl) {
+      langEl.onclick = async (e) => {
+        const b = e.target.closest('button[data-lang]');
+        if (b && !b.classList.contains('on')) showUI(await uiCall({ type: 'setUI', lang: b.dataset.lang }).catch(() => null));
+      };
+    }
+    const lim = q('.ui-lim');
+    if (lim) {
+      lim.onclick = async () => {
+        lim.disabled = true;
+        showUI(await uiCall({ type: 'setUI', limits: lim.getAttribute('aria-checked') !== 'true' }).catch(() => null));
+        lim.disabled = false;
+      };
+    }
+    showUI(await uiCall({ type: 'ui' }).catch(() => null));
+    q('.ui-font').onclick = async (e) => {
+      const b = e.target.closest('button[data-font]');
+      if (b) showUI(await uiCall({ type: 'setUI', font: b.dataset.font }).catch(() => null));
+    };
+    q('.ui-scale').onclick = async (e) => {
+      const b = e.target.closest('button[data-scale]');
+      if (b) showUI(await uiCall({ type: 'setUI', scale: Number(b.dataset.scale) }).catch(() => null));
+    };
+    const ai = q('.ui-ai');
+    if (ai) {
+      ai.onclick = async () => {
+        ai.disabled = true;
+        showUI(await uiCall({ type: 'setUI', aiColors: ai.getAttribute('aria-checked') !== 'true' }).catch(() => null));
+        ai.disabled = false;
+      };
+    }
+  }
+
+  // ---------- the token savers ----------
+  // rtk and caveman, which the app ships and turns on for Claude Code, Codex and Antigravity (TokenSavers.swift / savers.js):
+  // a switch each, and what rtk saved. One the user set up themselves switches the same way.
+  const SAVERS = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.savers);
+  const saversCall = (msg) => window.webkit.messageHandlers.savers.postMessage(msg);
+  const compact = (n) => new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
+  const SAVER_OFF = { rtk: "off · Claude Code, Codex and Antigravity read commands' output in full", caveman: 'off · full-length answers' };
+  function showSavers(all) {
+    if (!all) return;
+    for (const which of ['rtk', 'caveman']) {
+      const st = all[which], sw = q(`.hk-sw.ts[data-which="${which}"]`), note = q(`.ts-note[data-which="${which}"]`);
+      if (!st || !sw || !note) continue;
+      sw.setAttribute('aria-checked', st.on ? 'true' : 'false');
+      sw.disabled = !st.available;
+      sw.title = `Turn ${which} on or off`;
+      note.textContent = !st.available ? 'not in this build'
+        : st.saved != null ? `saved ${compact(st.saved)} tokens so far, ${Math.round(st.pct)}% of what ${compact(st.commands)} commands printed`
+        : st.on ? (which === 'caveman' ? 'on · about two thirds fewer output tokens, from the next chat' : 'on · nothing saved yet') : SAVER_OFF[which];
+    }
+  }
+  async function renderSaver() {
+    if (!SAVERS || !q('.hk-sw.ts')) return;
+    showSavers(await saversCall({ type: 'state' }).catch(() => null));
+    root.querySelectorAll('.hk-sw.ts').forEach((sw) => {
+      sw.onclick = async () => {
+        const which = sw.dataset.which, on = sw.getAttribute('aria-checked') !== 'true';
+        sw.disabled = true;
+        q(`.ts-note[data-which="${which}"]`).textContent = on ? `turning ${which} on…` : `turning ${which} off…`;
+        showSavers(await saversCall({ type: 'set', which, on }).catch(() => null));
+      };
+    });
+  }
+
+  // ---------- shortcuts ----------
+  // The keys of the app's actions, as the user wants them (the Mac app's Shortcuts.swift keeps them and sets the menus):
+  // click one, press the new keys. Esc cancels, Delete takes them off; ↺ brings one back to how it came.
+  const KEYS = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.keys);
+  const keysCall = (msg) => window.webkit.messageHandlers.keys.postMessage(msg);
+  let keysMsg = '';
+  // The shortcut wheel, as small as a settings icon: its five slices around the middle, the first one lit.
+  const WHEEL_ICON = (() => {
+    const C = 32, R0 = 10, R1 = 28, N = 5, GAP = 7;
+    const pt = (r, deg) => `${(C + r * Math.cos((deg * Math.PI) / 180)).toFixed(2)} ${(C + r * Math.sin((deg * Math.PI) / 180)).toFixed(2)}`;
+    let slices = '';
+    for (let i = 0; i < N; i++) {
+      const mid = -90 + (i * 360) / N, a = mid - 180 / N + GAP / 2, b = mid + 180 / N - GAP / 2;
+      slices += `<path${i ? '' : ' class="on"'} d="M${pt(R0, a)} L${pt(R1, a)} A${R1} ${R1} 0 0 1 ${pt(R1, b)} L${pt(R0, b)} A${R0} ${R0} 0 0 0 ${pt(R0, a)}Z"/>`;
+    }
+    return `<svg class="ksw-ico" viewBox="0 0 64 64" aria-hidden="true"><circle class="ring" cx="32" cy="32" r="31"/>${slices}<circle class="dot" cx="32" cy="32" r="3"/></svg>`;
+  })();
+  // How the shortcut wheel opens, on top of the page, as VS Code shows a command's keys: the primary way, the trackpad's
+  // four-finger click, and a secondary one you set: keys, or a mouse button with modifiers held (⌃ and the middle
+  // button to begin with, as on Windows).
+  function wheelCard(k) {
+    const label = k?.label || '';
+    return (
+      `<div class="ks-wheel">${WHEEL_ICON}<div class="ksw-txt"><b>Shortcut wheel</b><span>Your folders around the pointer: pick one and a chat opens there.</span></div>` +
+      '<div class="ksw-how">' +
+      '<div><small>primary</small><span class="ks-key fixed">4-finger click</span></div>' +
+      '<div><small>secondary</small>' +
+      (k?.changed ? '<button type="button" class="ks-undo" data-id="shortcutsWheel" title="Back to how it came">↺</button>' : '') +
+      `<button type="button" class="ks-key${label ? '' : ' none'}" data-id="shortcutsWheel" data-mouse="1" title="Click, then press keys or a mouse button (hold ⌃ ⌥ ⇧ ⌘ with it if you like). Delete: none">${label ? esc(label) : '—'}</button></div>` +
+      '</div></div>'
+    );
+  }
+  async function renderKeys(st) {
+    const page = q('.mn-keys');
+    if (!page) return;
+    if (!st) st = (await keysCall({ type: 'list' }).catch(() => null)) || {};
+    const all = st.shortcuts || [];
+    const list = all.filter((k) => k.id !== 'shortcutsWheel');
+    const groups = [];
+    for (const k of list) (groups.find((g) => g.name === k.group) || (groups.push({ name: k.group, items: [] }), groups[groups.length - 1])).items.push(k);
+    page.innerHTML =
+      wheelCard(all.find((k) => k.id === 'shortcutsWheel')) +
+      '<p class="ks-note">Click a shortcut, then press the new keys. Esc cancels, Delete takes them off.</p>' +
+      `<p class="ks-msg${keysMsg ? ' on' : ''}">${esc(keysMsg)}</p>` +
+      groups.map((g) => `<div class="hk-h">${esc(g.name.toUpperCase())}</div>` + g.items.map((k) =>
+        `<div class="ks-row"><span>${esc(k.title)}</span>` +
+        (k.changed ? `<button type="button" class="ks-undo" data-id="${esc(k.id)}" title="Back to how it came">↺</button>` : '') +
+        `<button type="button" class="ks-key${k.label ? '' : ' none'}" data-id="${esc(k.id)}">${k.label ? esc(k.label) : '—'}</button></div>`).join('')).join('') +
+      (list.some((k) => k.changed) ? '<div class="ks-foot"><button type="button" class="ks-all">reset all</button></div>' : '');
+    page.onclick = onKeysClick;
+  }
+  async function onKeysClick(e) {
+    const undo = e.target.closest('.ks-undo'), all = e.target.closest('.ks-all'), key = e.target.closest('.ks-key');
+    keysMsg = '';
+    if (undo || all) return renderKeys(await keysCall({ type: 'reset', id: undo ? undo.dataset.id : '' }));
+    if (!key || key.classList.contains('rec') || key.classList.contains('fixed')) return;
+    key.classList.add('rec');
+    const mouse = !!key.dataset.mouse;
+    key.textContent = mouse ? 'keys or a mouse button…' : 'press keys…';
+    const r = await keysCall({ type: 'record', mouse }).catch(() => ({ cancel: true }));
+    if (r.cancel) return renderKeys();
+    const done = await keysCall({ type: 'set', id: key.dataset.id, combo: r.combo });
+    if (done.error) keysMsg = done.error;
+    renderKeys(done.error ? null : done);
+  }
+
+  async function copyHandle() {
+    const text = S.hackerName ? `${S.hackerName}${tagText(S.tag)}` : '';
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(`copied ${text} · send it to a friend`);
+    } catch {
+      toast(text);
+    }
+  }
+
+  // Your status, like Discord's: online, away, do not disturb, invisible.
+  function statusMenu() {
+    if (q('.mn-pick')) return q('.mn-pick').remove();
+    const me = Social.state()?.me;
+    const pick = document.createElement('div');
+    pick.className = 'mn-pick';
+    pick.innerHTML = ['online', 'idle', 'dnd', 'invisible']
+      .map((st) => `<button type="button" data-status="${st}" class="${me && me.status === st ? 'on' : ''}">${Social.dot(st)}<span><b>${Social.PRESENCE[st].label}</b><small>${Social.PRESENCE[st].hint}</small></span></button>`)
+      .join('');
+    pick.onclick = async (e) => {
+      const b = e.target.closest('[data-status]');
+      if (!b) return;
+      pick.remove();
+      const r = await Social.setStatus(b.dataset.status);
+      if (r.error) return toast(errorText(r.error));
+    };
+    q('.mn-me').appendChild(pick);
+  }
+
+  const ago = (at) => {
+    const s = Math.max(0, (Date.now() - new Date(at)) / 1000);
+    return s < 60 ? 'now' : s < 3600 ? `${Math.floor(s / 60)}m ago` : s < 86400 ? `${Math.floor(s / 3600)}h ago` : `${Math.floor(s / 86400)}d ago`;
+  };
+  const tagged = (p) => `<b>${esc(p.name)}<i>#${String(p.tag).padStart(4, '0')}</i></b>`;
+
+  // Your status (the menu), friends and requests (their view), from Social's snapshot.
+  function renderSocial() {
+    badges();
+    const s = Social.state();
+    const me = s?.me;
+    if (modal === 'menu') {
+      setHTML(q('.mn-handle'), S.hackerName ? `${esc(S.hackerName)}<i>${tagText(S.tag)}</i>` : '');
+      setHTML(q('.mn-status'), me ? `${Social.dot(me.status)}<span>${Social.PRESENCE[me.status].label}</span>▾` : `${Social.dot('offline')}<span>offline</span>`);
+    }
+    if (shown !== 'friends') return;
+    const unread = Social.unread(), requests = Social.requests();
+    const online = s ? s.friends.filter((f) => f.presence && f.presence !== 'offline').length : 0;
+    setText(fq('.cv-friends .meta'), s ? `${s.friends.length} friends · ${online} online${unread ? ` · ${unread} unread` : ''}` : '');
+    setText(fq('.cv-requests .meta'), requests ? `${requests} waiting for you` : '');
+    if (!s) {
+      const why = S.reachable ? 'loading…' : "can't reach the server · friends come back with the connection";
+      setHTML(fq('.mn-friends'), `<div class="mn-empty">${why}</div>`);
+      return;
+    }
+    setHTML(
+      fq('.mn-friends'),
+      s.friends.length
+        ? s.friends
+            .map((f) => {
+              const line = f.last ? `${f.last.mine ? 'you: ' : ''}${esc(f.last.body)}` : esc(Social.PRESENCE[f.presence].label);
+              // Their level (a click shows their profile) and how long they've worked today, if they share it.
+              const lv = f.xp ? Xp.badge(f.xp.level, 'profile') : '';
+              // Their last 24 hours, not their today: that ends at their own midnight, wherever they live.
+              const last24 = f.xp && f.xp.last24;
+              const today = last24 ? `<span class="mn-today" title="Active in the last 24 hours">24h ${Xp.dur(last24)}</span>` : '';
+              // The flames, though, are a daily stat as in games: five hours of work in their today, from their own midnight.
+              const fire = (f.xp && f.xp.today) >= 5 * 3600;
+              return `<div class="mn-row${fire ? ' fire' : ''}" data-id="${esc(f.id)}"${fire ? ' title="On fire: 5 hours of work today"' : ''}>` +
+                `${fire ? '<canvas class="fire-card"></canvas>' : ''}${Social.dot(f.presence)}<div class="mn-main" data-act="chat"><span class="mn-name">${tagged(f)}${lv}</span><small>${line}</small></div>` +
+                `${today}${f.unread ? `<i class="cnt hot">${f.unread}</i>` : ''}<button class="mn-btn" type="button" data-act="profile" title="Profile: level and hours">◎</button>` +
+                '<button class="mn-btn" type="button" data-act="chat" title="Message (right-click for more)">✉</button></div>';
+            })
+            .join('')
+        : `<div class="mn-empty">no friends yet · send them your tag: <b>${esc(S.hackerName || '')}${tagText(S.tag)}</b></div>`,
+    );
+    lightFires(fq('.mn-friends'));
+    setHTML(
+      fq('.mn-in'),
+      s.incoming.length
+        ? s.incoming
+            .map((r) => `<div class="mn-row" data-id="${esc(r.id)}">${Social.dot(r.from.presence)}<div class="mn-main">${tagged(r.from)}<small>wants to be your friend · ${ago(r.at)}</small></div>` +
+              `<button class="mn-btn go" type="button" data-act="accept" title="Accept">✓</button><button class="mn-btn mn-del" type="button" data-act="decline" title="Decline">✕</button></div>`)
+            .join('')
+        : '<div class="mn-empty">no requests</div>',
+    );
+    setHTML(
+      fq('.mn-out'),
+      s.outgoing.length
+        ? s.outgoing
+            .map((r) => `<div class="mn-row" data-id="${esc(r.id)}"><i class="pdot p-offline"></i><div class="mn-main">${tagged(r.to)}<small>waiting · ${ago(r.at)}</small></div>` +
+              `<button class="mn-btn mn-del" type="button" data-act="cancel" title="Take back">✕</button></div>`)
+            .join('')
+        : '<div class="mn-empty">nothing sent</div>',
+    );
+  }
+
+  async function listAction(e) {
+    const el = e.target.closest('[data-act]');
+    const row = el && el.closest('.mn-row');
+    if (!row) return;
+    const id = row.dataset.id;
+    switch (el.dataset.act) {
+      case 'chat':
+        return Social.openChat(id);
+      case 'profile':
+        return Social.friend(id) && friendProfile(Social.friend(id));
+      case 'accept':
+        el.disabled = true;
+        return done(await Social.accept(id));
+      case 'decline':
+      case 'cancel':
+        el.disabled = true;
+        return done(await Social.dismiss(id));
+    }
+    function done(r) {
+      if (r.error) {
+        el.disabled = false;
+        toast(errorText(r.error));
+      } else Sfx.play(el.dataset.act === 'accept' ? 'accept' : 'decline');
+    }
+  }
+
+  // Right-click on a friend: message, copy their name#tag, or remove them (after a yes).
+  function friendMenu(e) {
+    const row = e.target.closest('.mn-friends .mn-row');
+    fq('.mn-ctx')?.remove();
+    if (!row) return;
+    e.preventDefault();
+    const f = Social.friend(row.dataset.id);
+    if (!f) return;
+    const box = views.friends.getBoundingClientRect();
+    const menu = document.createElement('div');
+    menu.className = 'mn-ctx';
+    menu.innerHTML =
+      '<button type="button" data-ctx="chat">✉ message</button><button type="button" data-ctx="profile">◎ view profile</button>' +
+      '<button type="button" data-ctx="copy">⧉ copy name#tag</button><hr><button type="button" class="danger" data-ctx="remove">✕ remove friend</button>';
+    menu.style.left = `${Math.min(e.clientX - box.left, box.width - 190)}px`;
+    menu.style.top = `${Math.min(e.clientY - box.top, box.height - 150)}px`;
+    menu.onclick = async (ev) => {
+      const b = ev.target.closest('[data-ctx]');
+      if (!b) return;
+      menu.remove();
+      if (b.dataset.ctx === 'chat') return Social.openChat(f.id);
+      if (b.dataset.ctx === 'profile') return friendProfile(f);
+      if (b.dataset.ctx === 'copy') {
+        try {
+          await navigator.clipboard.writeText(Social.handle(f));
+          toast(`copied ${Social.handle(f)}`);
+        } catch {}
+        return;
+      }
+      confirmRemove(f);
+    };
+    views.friends.appendChild(menu);
+  }
+
+  function confirmRemove(f) {
+    const ask = document.createElement('div');
+    ask.className = 'mn-confirm';
+    ask.innerHTML =
+      `<div class="mn-ask"><b>remove ${esc(Social.handle(f))}?</b>` +
+      "<p>you'll stop seeing each other's status and can't message each other, until one of you sends a new request.</p>" +
+      '<div class="mn-ask-btns"><button type="button" class="mn-btn" data-ans="no">cancel</button><button type="button" class="mn-btn danger" data-ans="yes">remove</button></div></div>';
+    ask.onclick = async (e) => {
+      const b = e.target.closest('[data-ans]');
+      if (e.target === ask || (b && b.dataset.ans === 'no')) return ask.remove();
+      if (!b) return;
+      b.disabled = true;
+      const r = await Social.unfriend(f.id);
+      ask.remove();
+      if (r.error) return toast(errorText(r.error));
+      Sfx.play('decline');
+      toast(`removed ${Social.handle(f)}`);
+    };
+    views.friends.appendChild(ask);
+    ask.querySelector('[data-ans="no"]').focus();
+  }
+
+  // ---------- levels: your profile, a friend's card, sharing your active time ----------
+  const stat = (label, value, note) => `<div><label>${label}</label><b>${value}</b>${note ? `<small>${note}</small>` : ''}</div>`;
+
+  // Your rank's headband, level and XP, today's time and the rested bonus, the week, the streak, and the ranks ahead.
+  function renderProfile() {
+    const el = q('.mn-profile');
+    if (!el) return;
+    const x = S.xp;
+    if (!x) {
+      const why = S.reachable ? 'loading…' : "can't reach the server · your level comes back with the connection";
+      return setHTML(el, `<div class="mn-empty">${why}</div>`);
+    }
+    const r = Xp.rank(x.level);
+    const rested =
+      x.rested > 0
+        ? `<b>rested</b> · the next ${Xp.dur(x.rested)} today earn double XP`
+        : x.today >= 8 * 3600
+          ? '<b>past 8 hours today</b> · half XP from here · take a break'
+          : 'rested again tomorrow · the first 2 hours each day earn double XP';
+    const ranks = Xp.RANKS.map((k) => {
+      const state = x.level > k.to ? 'done' : x.level >= k.from ? 'now' : 'next';
+      return `<div class="pf-rk ${state}" style="--rc:${k.color}"><i></i><b>${k.name}</b><span>level ${k.from}–${k.to}</span><em>${state === 'done' ? '✓' : state === 'now' ? 'you' : ''}</em></div>`;
+    }).join('');
+    setHTML(
+      el,
+      `<div class="pf-head" style="--rc:${r.color}">${Xp.headband(x.level, 'pf-band')}` +
+        `<div class="pf-rank"><small>RANK</small><b>${esc(r.name)}</b><span>Level ${x.level}</span></div></div>` +
+        `<div class="pf-xp" style="--rc:${r.color}"><div class="pf-bar"><i style="width:${Xp.pct(x).toFixed(1)}%"></i></div><div class="pf-xpline">` +
+        (x.to
+          ? `<span>${Xp.num(x.xp - x.from)} / ${Xp.num(x.to - x.from)} XP</span><span>${Xp.num(x.to - x.xp)} XP to level ${x.level + 1}</span>`
+          : `<span>${Xp.num(x.xp)} XP</span><span>top level</span>`) +
+        `</div></div><p class="pf-rested">${rested}</p>` +
+        `<div class="pf-stats">${stat('TODAY', Xp.dur(x.today))}${stat('THIS WEEK', `${x.week}/${x.goal} days`, x.week >= x.goal ? 'goal reached' : '30+ min a day')}` +
+        `${stat('STREAK', `${x.streak} ${x.streak === 1 ? 'week' : 'weeks'}`, x.bonus ? `+${x.bonus}% XP` : `${x.goal} days a week`)}${stat('TOTAL', Xp.hours(x.total))}</div>` +
+        (x.days ? `<div class="hk-h">LAST 7 DAYS</div>${Xp.week(x.days, r.color)}` : '') +
+        `<div class="hk-h">RANKS</div><div class="pf-ranks">${ranks}</div>` +
+        '<p class="pf-rules">1 XP for every active minute · the first 2 hours a day count double, past 8 hours half · +50 for showing up · ' +
+        `${x.goal} days a week keep a streak, +10% XP for every week of it</p>`,
+    );
+  }
+
+  // A friend's card: their rank and level, and their active time unless they keep it to themselves.
+  function friendProfile(f) {
+    fq('.mn-confirm')?.remove();
+    const x = f.xp || { level: 1, today: null, days: null, week: null, total: null };
+    const r = Xp.rank(x.level);
+    const card = document.createElement('div');
+    card.className = 'mn-confirm';
+    card.innerHTML =
+      `<div class="mn-ask pf-card" style="--rc:${r.color}"><div class="pf-head">${Xp.headband(x.level, 'pf-band')}` +
+      `<div class="pf-rank"><small>${Social.dot(f.presence)} ${esc(Social.PRESENCE[f.presence || 'offline'].label)}</small>${tagged(f)}` +
+      `<span>Level ${x.level} · ${esc(r.name)}</span></div></div>` +
+      (x.total === null
+        ? '<p>keeps their active time to themselves</p>'
+        : `<div class="pf-stats">${stat('LAST 24H', x.last24 == null ? '—' : Xp.dur(x.last24))}${stat('THIS WEEK', `${x.week}/3 days`)}${stat('TOTAL', Xp.hours(x.total))}</div>` +
+          (x.days ? `<div class="hk-h">LAST 7 DAYS</div>${Xp.week(x.days, r.color, x.daysEnd)}` : '')) +
+      '<div class="mn-ask-btns"><button type="button" class="mn-btn" data-ans="close">close</button><button type="button" class="mn-btn go" data-ans="chat">✉ message</button></div></div>';
+    card.onclick = (e) => {
+      const b = e.target.closest('[data-ans]');
+      if (e.target === card || (b && b.dataset.ans === 'close')) return card.remove();
+      if (b && b.dataset.ans === 'chat') Social.openChat(f.id);
+    };
+    views.friends.appendChild(card);
+  }
+
+  function renderActivity() {
+    for (const [cls, on] of [['act', S.xp ? S.xp.show !== false : true], ['brd', S.xp ? S.xp.board !== false : true]]) {
+      const sw = q(`.hk-sw.${cls}`);
+      if (!sw) continue;
+      sw.classList.toggle('on', on);
+      sw.setAttribute('aria-checked', String(on));
+      sw.disabled = !S.xp;
+    }
+  }
+
+  async function toggleBoard() {
+    if (!S.xp) return;
+    const show = S.xp.board === false;
+    const r = await Social.setBoard(show);
+    if (r.error) return toast(errorText(r.error));
+    S.xp = { ...S.xp, board: show };
+    renderActivity();
+    board = null;
+    if (shown === 'board') loadBoard();
+    toast(show ? 'your name shows on the leaderboard again' : "you're Anonymous on the leaderboard · only you see your name there");
+  }
+
+  // ---------- the leaderboard: everyone with XP, this week (since Monday) or ever, and a friend request one click away ----------
+  let boardBy = 'week';
+  // Their active time this week, as the board counts its XP: from their Monday (the last of their 7 days is their today).
+  const weekActive = (u) => {
+    if (!u.days) return null;
+    const sinceMonday = u.daysEnd ? new Date(u.daysEnd + 'T00:00:00Z').getUTCDay() || 7 : 7;
+    return u.days.slice(-sinceMonday).reduce((a, s) => a + (s || 0), 0);
+  };
+  let board = null; // the API's answer: { by, rows, me }
+  let boardSeq = 0;
+
+  async function loadBoard() {
+    const seq = ++boardSeq;
+    renderBoard();
+    const r = await Social.leaderboard(boardBy);
+    if (seq !== boardSeq) return;
+    board = r;
+    renderBoard();
+  }
+
+  const boardUser = (id) => (board && !board.error ? [...board.rows, board.me].find((u) => u && u.id === id) : null);
+
+  // What you can do about someone on the board: nothing (you, or someone Anonymous), message (a friend), wait (asked
+  // them), or ask.
+  function boardButton(u, key) {
+    if (u.me || !u.id) return '';
+    if (u.friend) return `<button type="button" class="mn-btn" data-${key}="chat" title="Message">✉</button>`;
+    if (u.requested) return '<span class="lb-state">request sent</span>';
+    return `<button type="button" class="mn-btn go" data-${key}="add" title="${u.asked ? 'They asked you: accept' : 'Send a friend request'}">${u.asked ? '✓ accept' : '+ add'}</button>`;
+  }
+
+  function boardRow(u) {
+    const r = Xp.rank(u.level);
+    // Hid their name, like on Riot's ladders: their place, level and score, nothing that tells who they are.
+    if (!u.id) {
+      return (
+        `<div class="lb-row anon${u.pos <= 3 ? ' top' : ''}" style="--rc:${r.color}"><span class="lb-pos">${u.pos}</span>` +
+        `<div class="lb-who"><span class="mn-name"><b class="lb-anon">Anonymous</b>${Xp.badge(u.level)}</span><small>${esc(r.name)}</small></div>` +
+        `<span class="lb-spark off"></span><span class="lb-score">${boardBy === 'week' ? `+${Xp.num(u.week)}` : Xp.num(u.xp)} XP</span><span class="lb-act"></span></div>`
+      );
+    }
+    const active = weekActive(u);
+    // Five hours of work today, from their own midnight (a daily stat, as in games): the card burns. Their today is the
+    // last of their 7 days (null while they're invisible).
+    const fire = (u.days ? u.days[u.days.length - 1] : 0) >= 5 * 3600;
+    const spark = u.days
+      ? `<span class="lb-spark">${u.days.map((s) => `<i style="height:${s ? Math.max(12, Math.min(100, (s / 28_800) * 100)).toFixed(0) : 0}%"></i>`).join('')}</span>`
+      : '<span class="lb-spark off" title="keeps their active time to themselves"></span>';
+    return (
+      `<div class="lb-row${u.me ? ' me' : ''}${u.pos <= 3 ? ' top' : ''}${fire ? ' fire' : ''}" data-id="${esc(u.id)}" style="--rc:${r.color}"${fire ? ' title="On fire: 5 hours of work today"' : ''}>` +
+      `${fire ? '<canvas class="fire-card"></canvas>' : ''}<span class="lb-pos">${u.pos}</span><div class="lb-who"><span class="mn-name">${u.working ? '<i class="lb-live" title="working now"></i>' : ''}${tagged(u)}${Xp.badge(u.level)}${u.me ? '<em class="lb-you">you</em>' : ''}` +
+      `${u.me && u.anon ? '<em class="lb-hid" title="Others see you as Anonymous">hidden</em>' : ''}</span>` +
+      `<small>${esc(r.name)}${u.last24 ? ` · ${Xp.dur(u.last24)} in 24h` : ''}${active === null ? '' : ` · ${Xp.dur(active)} this week`}</small></div>${spark}` +
+      `<span class="lb-score">${boardBy === 'week' ? `+${Xp.num(u.week)}` : Xp.num(u.xp)} XP</span><span class="lb-act">${boardButton(u, 'act')}</span></div>`
+    );
+  }
+
+  function renderBoard() {
+    const el = views.board.querySelector('.lb-host');
+    const head =
+      `<div class="lb-head"><div class="lb-seg"><button type="button" data-by="week" class="${boardBy === 'week' ? 'on' : ''}">THIS WEEK</button>` +
+      `<button type="button" data-by="all" class="${boardBy === 'all' ? 'on' : ''}">ALL TIME</button></div>` +
+      // How many are at work right now (the green dots), so nobody works alone.
+      `<span class="lb-note">${board?.working ? `<b class="lb-now"><i class="lb-live"></i>${board.working} working now</b> · ` : ''}` +
+      `${boardBy === 'week' ? 'XP earned since Monday' : 'XP ever'} · click someone for their week</span></div>`;
+    if (!board || board.error) {
+      const why = !board ? (S.reachable ? 'loading…' : "can't reach the server · the leaderboard comes back with the connection") : errorText(board.error);
+      return setHTML(el, `${head}<div class="mn-empty">${why}</div>`);
+    }
+    const rows = board.rows.map(boardRow).join('');
+    const mine = board.me && board.me.pos > board.rows.length ? `<div class="lb-gap">· · ·</div>${boardRow(board.me)}` : '';
+    const absent = board.me ? '' : `<p class="lb-foot">you'll show up here once you have some XP</p>`;
+    setHTML(el, head + (rows ? `<div class="lb-list">${rows}${mine}</div>` : '<div class="mn-empty">no one on the leaderboard yet</div>') + absent);
+    lightFires(el);
+    el.querySelectorAll('.lb-row').forEach((r) => r.classList.toggle('sel', !!picked && r.dataset.id === picked));
+    // Someone's card shows from the start: the one picked before, you, or the first with a name.
+    const first = boardUser(picked) || board.me || board.rows.find((u) => u.id);
+    if (first && (first.id !== picked || !views.board.querySelector('.pf-card'))) boardCard(first);
+  }
+
+  // Burning cards (five hours of work today, on the leaderboard and among friends): flames burn along their bottom,
+  // under the text (now and then a tongue licks up behind it), for as long as they're shown.
+  const lit = new WeakSet();
+  function lightFires(el) {
+    el.querySelectorAll('.fire-card').forEach((c) => {
+      if (lit.has(c)) return;
+      lit.add(c);
+      Fire.burn(c, { reach: [13, 0, 0], scale: 7 });
+    });
+  }
+
+  async function boardAction(e) {
+    const seg = e.target.closest('[data-by]');
+    if (seg) {
+      if (seg.dataset.by === boardBy) return;
+      boardBy = seg.dataset.by;
+      board = null;
+      return loadBoard();
+    }
+    const row = e.target.closest('.lb-row');
+    const u = row && row.dataset.id && boardUser(row.dataset.id);
+    if (!u) return;
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'chat') return Social.openChat(u.id);
+    if (act === 'add') return addFromBoard(u, e.target.closest('button'));
+    boardCard(u);
+  }
+
+  async function addFromBoard(u, button) {
+    if (button) button.disabled = true;
+    const r = await Social.request(Social.handle(u));
+    if (r.error && r.error !== 'already_requested' && r.error !== 'already_friends') {
+      if (button) button.disabled = false;
+      return toast(REQUEST_ERRORS[r.error] || errorText(r.error));
+    }
+    Sfx.play('accept');
+    if (r.friend || r.error === 'already_friends') u.friend = true;
+    else u.requested = true;
+    toast(u.friend ? `you and ${Social.handle(u)} are friends now` : `request sent to ${Social.handle(u)}`);
+    renderBoard();
+    if (picked === u.id) boardCard(u);
+  }
+
+  // Someone's card from the board, in their own theme (the one they picked in their app; the default before themes
+  // existed): their rank and level, their week, a friend request (or a message, a friend), and their theme, yours in one
+  // click.
+  let picked = null;
+  async function boardCard(u) {
+    picked = u.id;
+    views.board.querySelectorAll('.lb-row').forEach((r) => r.classList.toggle('sel', r.dataset.id === u.id));
+    const list = await themeList();
+    if (picked !== u.id) return;
+    const t = list && (list.themes.find((x) => x.id === (u.theme || 'voxpilot')) || list.themes[0]);
+    const host = views.board.querySelector('.cv-card');
+    host.setAttribute('style', t ? themeStyle(t.tokens) : '');
+    host.querySelector('.meta').textContent = t ? `in their theme · ${t.name}` : '';
+    const r = Xp.rank(u.level);
+    const active = weekActive(u);
+    const theirs = !t ? '' : u.me ? '<em>yours</em>' : t.id === list.chosen ? '<em>you use it too</em>'
+      : '<button type="button" class="mn-btn go" data-ans="theme" title="Use their theme">use this theme</button>';
+    setHTML(host.querySelector('.pf-host'),
+      `<div class="pf-card" style="--rc:${r.color}"><div class="pf-head">${Xp.headband(u.level, 'pf-band')}` +
+      `<div class="pf-rank"><small>#${u.pos} on the leaderboard${u.me ? ' · you' : ''}</small>${tagged(u)}<span>Level ${u.level} · ${esc(r.name)}</span></div></div>` +
+      `<div class="pf-stats">${stat('LAST 24H', u.last24 == null ? '—' : Xp.dur(u.last24))}${stat('THIS WEEK', `+${Xp.num(u.week)} XP`)}${stat('ACTIVE', active === null ? '—' : Xp.dur(active))}${stat('TOTAL', `${Xp.num(u.xp)} XP`)}</div>` +
+      (u.days ? `<div class="hk-h">LAST 7 DAYS</div>${Xp.week(u.days, r.color, u.daysEnd)}` : '<p class="pf-note">keeps their active time to themselves</p>') +
+      (t ? `<div class="pf-theme"><span><label>THEME</label><b>${esc(t.name)}</b></span>${theirs}</div>` : '') +
+      `<div class="mn-ask-btns">${boardButton(u, 'ans')}</div></div>`);
+    host.querySelector('.pf-host').onclick = async (e) => {
+      const b = e.target.closest('[data-ans]');
+      if (!b) return;
+      if (b.dataset.ans === 'chat') Social.openChat(u.id);
+      if (b.dataset.ans === 'add') addFromBoard(u, b);
+      if (b.dataset.ans === 'theme' && t) {
+        await theme('choose', { id: t.id }).catch(() => {});
+        list.chosen = t.id;
+        toast(`your theme is ${t.name} now`);
+        boardCard(u);
+      }
+    };
+  }
+
+  async function toggleActivity() {
+    if (!S.xp) return;
+    const show = S.xp.show === false;
+    const r = await Social.setActivity(show);
+    if (r.error) return toast(errorText(r.error));
+    S.xp = { ...S.xp, show };
+    renderActivity();
+    toast(show ? 'friends see your active time again' : 'your active time is hidden from friends · your level still shows');
+  }
+
+  // Your XP changed (the daily bonus, a new level): show it now rather than at the next heartbeat.
+  Social.on((ev) => {
+    if (ev.type === 'xp' && ev.xp && S) render({ ...S, xp: ev.xp });
+  });
+
+  function badges() {
+    const n = Social.unread() + Social.requests(), notes = Social.unreadNotes();
+    const show = (b, k) => {
+      if (!b) return;
+      b.textContent = k > 99 ? '99+' : k;
+      b.hidden = !k;
+    };
+    show(document.querySelector('#activity [data-view=friends] .vs-badge'), n);
+    show(document.querySelector('#activity [data-view=notifications] .vs-badge'), notes);
+    const me = brand.querySelector('.bme');
+    const st = Social.state()?.me?.status;
+    me.hidden = !st;
+    if (st) me.className = `pdot bme p-${st}`;
+  }
+  Social.on(() => renderSocial());
+
+  // Settings: the version and its updates. They download by themselves and go in when you step away (or at once, with
+  // the switch); "check for updates" asks now, "update now" shows what's new and restarts into it.
+  function renderInfo() {
+    const el = q('.hk-info');
+    if (!el) return;
+    const status = S.updating
+      ? `<em>${esc(S.updating + pct())}</em>`
+      : S.update
+        ? `<em class="${S.xpPaused ? 'bad' : ''}">${esc(S.update.version)} ${S.updateReady ? 'ready · installs when you step away' : `is out · downloading${pct()}`}${S.xpPaused ? ' · XP paused until then' : ''}</em>`
+        : S.checking
+          ? '<em class="dim">checking…</em>'
+          : S.checkedAt
+            ? `<em class="dim">up to date · checked ${ago(S.checkedAt)}</em>`
+            : '';
+    setHTML(
+      el,
+      `<div class="hk-row"><span>version</span><div class="hk-val"><b>${esc(S.version || '?')}</b>${status}</div></div>` +
+        '<div class="hk-row"><span>updates<small>they download by themselves and install when you step away · your chats keep running</small></span><div class="hk-val">' +
+        `<button type="button" class="hk-upd hk-check"${S.checking || S.updating ? ' disabled' : ''}>check for updates</button>` +
+        `${S.update && !S.updating ? '<button type="button" class="hk-upd hk-now">update now</button>' : ''}</div></div>` +
+        `<div class="hk-row"><span>install updates right away<small>off: an update waits until you're away for 10 minutes</small></span>` +
+        `<button type="button" class="hk-sw upd${S.updateRightAway ? ' on' : ''}" role="switch" aria-checked="${!!S.updateRightAway}" title="Install updates as soon as they're downloaded"><i></i></button></div>`,
+    );
+    el.querySelector('.hk-check').onclick = () => call('checkUpdate').then((s) => s && render(s)).catch(() => toast(errorText('offline')));
+    const now = el.querySelector('.hk-now');
+    if (now) now.onclick = openUpdate;
+    el.querySelector('.hk-sw.upd').onclick = () => call('updateRightAway', { on: !S.updateRightAway }).then((s) => s && render(s));
+  }
+
+
+  // ---------- themes ----------
+  // Swift makes and applies the colours (Themes.swift, the "theme" handler); the list comes once, with every theme's
+  // colours, for the theme view's pictures and for someone's card in their theme.
+  const theme = (type, payload) => window.webkit.messageHandlers.theme.postMessage(Object.assign({ type }, payload || {}));
+  let themes = null;
+  const themeList = async () => themes || (themes = await theme('list').catch(() => null));
+  // A theme's colours on one element and what's in it: its tokens, those made from them again (style.css makes them on
+  // the root, from the root's), and its text colour.
+  const themeStyle = (tokens) =>
+    Object.entries(tokens).map(([k, v]) => `${k}:${v}`).join(';') +
+    ';--panel:rgba(var(--panel-rgb),var(--glass-a));--line:rgba(var(--accent-rgb),0.32);--line-soft:rgba(var(--accent-rgb),0.13);color:var(--txt)';
+  let themeAt = -1; // the card the arrow keys are on
+
+  function themeCard(t, kept) {
+    const k = t.tokens, a = (i) => k[`--a${i}`];
+    const vars = {
+      '--t-bg': k['--bg'], '--t-panel': `rgb(${k['--panel-rgb']})`, '--t-acc': k['--accent'], '--t-soft': k['--accent-soft'], '--t-txt': k['--txt'],
+      '--t-dim': k['--dim'], '--t-cyan': k['--cyan'], '--t-warn': k['--warn'], '--t-code': k['--code-bg'], '--t-fg': k['--code-fg'], '--t-cur': k['--code-cursor'],
+    };
+    const style = Object.entries(vars).map(([n, v]) => `${n}:${v}`).join(';');
+    return (
+      `<button type="button" class="th-card${t.id === kept ? ' on' : ''}" data-id="${esc(t.id)}" style="${esc(style)}">` +
+      '<span class="th-shot"><span class="th-top"><i></i><b>VOXPILOT</b><em></em></span>' +
+      '<span class="th-side"><i class="busy"></i><i class="idle"></i><i class="wait"></i></span>' +
+      `<span class="th-term"><span><b style="color:${a(2)}">❯</b> git status</span><span style="color:${a(1)}">  modified: app.js</span>` +
+      `<span style="color:${a(2)}">  new file: themes.json</span><span><b style="color:${a(4)}">~/repo</b> <b style="color:${a(5)}">main</b> <i class="cur"></i></span></span>` +
+      `<span class="th-pal">${Array.from({ length: 16 }, (_, i) => `<i style="background:${a(i)}"></i>`).join('')}</span></span>` +
+      `<span class="th-name">${esc(t.name)}<em>${t.id === kept ? 'ACTIVE' : ''}</em></span></button>`
+    );
+  }
+
+  // The themes view: each theme as a small picture of the app in its own colours. Pointing at one, or moving to it with
+  // the arrow keys, shows the whole app in it at once; a click (or ↩) keeps it; leaving the cards or the view goes back
+  // to the kept one.
+  async function openThemes() {
+    const el = views.themes;
+    const list = await themeList();
+    if (shown !== 'themes') return;
+    if (!list || !list.themes) return setHTML(el, `<section class="panel cv-themes"><header><span class="tag">themes</span></header><div class="mn-empty">themes didn't load</div></section>`);
+    el.innerHTML =
+      `<section class="panel cv-themes"><header><span class="tag">themes</span><span class="meta">${list.themes.length} themes · point to try · click to keep · the orbit map keeps its colours</span></header>` +
+      `<div class="body th-grid">${list.themes.map((t) => themeCard(t, list.chosen)).join('')}</div></section>`;
+    const cards = [...el.querySelectorAll('.th-card')];
+    let timer = 0;
+    themeAt = -1;
+    const show = (id) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => theme(id === list.chosen ? 'revert' : 'preview', { id }), 90);
+    };
+    const mark = (i) => {
+      themeAt = i;
+      cards.forEach((c, j) => c.classList.toggle('hot', j === i));
+    };
+    const keep = (card) => {
+      list.chosen = card.dataset.id;
+      clearTimeout(timer);
+      theme('choose', { id: list.chosen });
+      cards.forEach((c) => {
+        c.classList.toggle('on', c === card);
+        c.querySelector('.th-name em').textContent = c === card ? 'ACTIVE' : '';
+      });
+    };
+    cards.forEach((card, i) => {
+      card.onmouseenter = () => {
+        mark(i);
+        show(card.dataset.id);
+      };
+      card.onclick = () => keep(card);
+    });
+    el.querySelector('.th-grid').onmouseleave = () => {
+      mark(-1);
+      show(list.chosen);
+    };
+    el.__keys = (e) => {
+      const cols = getComputedStyle(el.querySelector('.th-grid')).gridTemplateColumns.split(' ').length;
+      const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: cols, ArrowUp: -cols }[e.key];
+      if (step) {
+        e.preventDefault();
+        const i = Math.max(0, Math.min(cards.length - 1, themeAt < 0 ? cards.findIndex((c) => c.dataset.id === list.chosen) : themeAt + step));
+        mark(i);
+        cards[i].scrollIntoView({ block: 'nearest' });
+        show(cards[i].dataset.id);
+      } else if (e.key === 'Enter' && themeAt >= 0) {
+        e.preventDefault();
+        keep(cards[themeAt]);
+      }
+    };
+  }
+
+  // ---------- the activity bar's views (git.js): the leaderboard and the themes, where the dashboard's middle is ----------
+  const views = {};
+  for (const v of ['friends', 'board', 'themes', 'notifications']) {
+    const el = document.createElement('section');
+    el.id = `${v}-view`;
+    el.className = 'cv';
+    document.getElementById('app').appendChild(el);
+    views[v] = el;
+  }
+  views.board.innerHTML =
+    '<section class="panel cv-list"><header><span class="tag">leaderboard</span><span class="meta">everyone with XP</span></header><div class="body lb-host"></div></section>' +
+    '<section class="panel cv-card"><header><span class="tag">hacker</span><span class="meta"></span></header><div class="body pf-host"></div></section>';
+  views.board.querySelector('.lb-host').addEventListener('click', boardAction);
+  const fq = (sel) => views.friends.querySelector(sel);
+  views.friends.innerHTML =
+    '<section class="panel cv-friends"><header><span class="tag">friends</span><span class="meta"></span></header><div class="body">' +
+    '<label class="hk-field mn-add"><span class="hk-prompt">+</span><input class="mn-handle-in" maxlength="21" spellcheck="false" autocomplete="off" placeholder="add a friend · name#0427"><button class="mn-send" type="button" disabled>send request</button></label>' +
+    '<p class="hk-status mn-add-status"></p><div class="mn-list mn-friends"></div></div></section>' +
+    '<section class="panel cv-requests"><header><span class="tag">requests</span><span class="meta"></span></header><div class="body">' +
+    '<div class="hk-h">INCOMING</div><div class="mn-list mn-in"></div><div class="hk-h">SENT</div><div class="mn-list mn-out"></div></div></section>';
+  views.friends.addEventListener('click', listAction);
+  views.friends.addEventListener('contextmenu', friendMenu);
+  views.friends.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('.mn-ctx')) fq('.mn-ctx')?.remove();
+  });
+  // Friends: add one by name#tag.
+  {
+    const add = fq('.mn-handle-in'), send = fq('.mn-send'), addStatus = fq('.mn-add-status');
+    const valid = () => /^[A-Za-z0-9_.-]+( [A-Za-z0-9_.-]+)*#\d{1,4}$/.test(add.value.trim());
+    const say = (cls, msg) => {
+      addStatus.className = `hk-status mn-add-status ${cls}`;
+      addStatus.textContent = msg;
+    };
+    add.addEventListener('input', () => {
+      send.disabled = !valid();
+      say('', '');
+    });
+    const request = async () => {
+      if (!valid()) return;
+      send.disabled = true;
+      const r = await Social.request(add.value.trim());
+      if (r.error) {
+        send.disabled = false;
+        return say('bad', REQUEST_ERRORS[r.error] || errorText(r.error));
+      }
+      add.value = '';
+      say('ok', r.friend ? `you and ${Social.handle(r.friend)} are friends now` : `request sent to ${Social.handle(r.request.to)}`);
+    };
+    send.onclick = request;
+    add.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') request();
+    });
+  }
+  // Notifications from the developer (the admin page), newest first. The ones you hadn't read when the view opened keep
+  // their NEW mark while it stays open; opening it reads them all.
+  views.notifications.innerHTML =
+    '<section class="panel cv-notes"><header><span class="tag">notifications</span><span class="meta"></span></header><div class="body nt-list"></div></section>';
+  let fresh = new Set();
+  function renderNotes() {
+    const N = Social.notes();
+    const el = views.notifications.querySelector('.nt-list');
+    setText(views.notifications.querySelector('.meta'), N ? `${N.list.length} from the developer` : '');
+    if (!N) return setHTML(el, `<div class="mn-empty">${S && S.reachable ? 'loading…' : "can't reach the server · notifications come back with the connection"}</div>`);
+    setHTML(el, N.list.length
+      ? N.list.map((n) =>
+          `<div class="nt-item${fresh.has(n.id) ? ' new' : ''}"><div class="nt-head"><b>${richText(n.title)}</b>${fresh.has(n.id) ? '<em>NEW</em>' : ''}` +
+          `<span class="nt-time" title="${esc(new Date(n.at).toLocaleString())}">${ago(n.at)}</span></div>` +
+          `${n.body ? `<div class="nt-body">${richText(n.body)}</div>` : ''}</div>`).join('')
+      : '<div class="mn-empty">no notifications yet · news from the developer shows up here</div>');
+  }
+  function openNotes() {
+    const N = Social.notes();
+    fresh = new Set(N ? N.list.filter((n) => !n.read).map((n) => n.id) : []);
+    renderNotes();
+    if (!N) Social.loadNotes();
+    else if (N.unread) Social.readNotes();
+  }
+  Social.on((ev) => {
+    if (ev.type === 'notification' && shown === 'notifications') {
+      fresh.add(ev.notification.id);
+      Social.readNotes();
+    }
+    if (shown === 'notifications' && (ev.type === 'notes' || ev.type === 'notification' || ev.type === 'notification_gone')) {
+      // Loaded while the view was open: whatever was unread is new now.
+      if (ev.type === 'notes' && !fresh.size && Social.unreadNotes()) return openNotes();
+      renderNotes();
+    }
+  });
+
+  let shown = null;
+  function showView(v) {
+    if (v === shown) return;
+    if (shown === 'themes') theme('revert').catch(() => {});
+    shown = v;
+    document.getElementById('app').classList.toggle('cloud-mode', !!v);
+    for (const [k, el] of Object.entries(views)) el.classList.toggle('on', k === v);
+    if (v === 'friends') {
+      renderSocial();
+      // Whatever changed while you weren't looking (a missed live event, another device) shows when it opens.
+      Social.load();
+    }
+    if (v === 'board') loadBoard();
+    if (v === 'themes') openThemes();
+    if (v === 'notifications') openNotes();
+  }
+
+  function close() {
+    if (!modal) return;
+    modal = null;
+    tellModal(false);
+    root.onmousedown = null;
+    const pk = q('.pk');
+    if (pk) pk.classList.replace('crt-on', 'crt-off');
+    setTimeout(() => {
+      if (modal) return;
+      root.className = '';
+      root.innerHTML = '';
+    }, 450);
+  }
+
+  const refresh = () => call('state').then(render).catch(() => {});
+
+  $('update').addEventListener('click', openUpdate);
+  $('settings').addEventListener('click', () => openMenu('settings'));
+  brand.addEventListener('click', () => openMenu('profile'));
+  addEventListener('keydown', (e) => {
+    if (!modal && shown === 'themes' && e.key !== 'Escape' && !e.target.closest('input, textarea')) return views.themes.__keys?.(e);
+    if (e.key !== 'Escape') return;
+    // Esc on a view of the activity bar closes what's on top of it first (a card, a small menu), then goes back to the
+    // dashboard.
+    if (!modal && shown) {
+      const top = views[shown].querySelector('.mn-confirm, .mn-ctx');
+      return top ? top.remove() : window.GitView?.view('dash');
+    }
+    if (modal === 'update') {
+      if (!S.updating) close();
+      return;
+    }
+    if (modal === 'feedback') return close();
+    if (modal !== 'menu') return;
+    // Esc closes what's on top first: the confirmation, a small menu, then the main menu.
+    const top = q('.mn-confirm') || q('.mn-ctx') || q('.mn-pick');
+    if (top) return top.remove();
+    close();
+  });
+  refresh();
+  Social.loadNotes();
+
+  return { render, openMenu, openSettings: () => openMenu('settings'), openUpdate, openFeedback, showView };
+})();

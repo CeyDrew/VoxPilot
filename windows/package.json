@@ -1,0 +1,86 @@
+{
+  "name": "voxpilot",
+  "productName": "VoxPilot",
+  "version": "1.2.0",
+  "description": "A HUD for running many AI coding sessions: every session on a live orbit map, each chat in its own window",
+  "author": "Voxnup",
+  "license": "MIT",
+  "private": true,
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "rebuild": "electron-rebuild -f -w node-pty",
+    "dist": "node scripts/fetch-rtk.js && electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-unicode11": "^0.9.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/addon-webgl": "^0.19.0",
+    "@xterm/xterm": "^6.0.0",
+    "electron-updater": "^6.8.11",
+    "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.1",
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.voxnup.voxpilot",
+    "productName": "VoxPilot",
+    "artifactName": "VoxPilot-Setup-${version}.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "npmRebuild": false,
+    "files": [
+      "src/**",
+      "pages/**",
+      "package.json",
+      "!**/*.pdb",
+      "!node_modules/node-pty/prebuilds/darwin-*/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../app/Resources/web",
+        "to": "web"
+      },
+      {
+        "from": "../app/Resources/caveman",
+        "to": "caveman"
+      },
+      {
+        "from": "vendor/rtk",
+        "to": "bin"
+      },
+      {
+        "from": "../LICENSE",
+        "to": "LICENSE.txt"
+      }
+    ],
+    "asarUnpack": [
+      "node_modules/node-pty/**"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "shortcutName": "VoxPilot"
+    },
+    "electronFuses": {
+      "runAsNode": false,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "enableCookieEncryption": true
+    }
+  }
+}
