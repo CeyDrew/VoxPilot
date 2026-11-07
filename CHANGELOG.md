@@ -1,5 +1,9 @@
 # Değişiklikler
 
+## 1.2.1
+
+- Ayarlar: token tasarrufu, yapay zekâ renkleri ve limit düğmeleri açıkken açık görünüyor.
+
 ## 1.2.0
 
 - Kaynak Denetimi: GitHub bağlantısı olmayan bir depoda Dalı Yayımla, depoyu GitHub hesabında (gizli ya da herkese açık) açıp gönderir.

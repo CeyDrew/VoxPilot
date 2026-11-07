@@ -207,8 +207,8 @@
 .hk-row .hk-sw { position: relative; flex: none; width: 34px; height: 18px; padding: 0; border: 1px solid rgba(var(--glow), 0.4); border-radius: 9px; background: rgba(0, 0, 0, 0.4); }
 .hk-row .hk-sw:hover { background: rgba(0, 0, 0, 0.4); box-shadow: none; }
 .hk-sw i { position: absolute; left: 2px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--dim); transition: transform 0.18s, background 0.18s; }
-.hk-row .hk-sw.on { border-color: var(--green); }
-.hk-sw.on i { background: var(--green); box-shadow: 0 0 8px rgba(var(--green-rgb), 0.7); transform: translateX(16px); }
+.hk-row .hk-sw.on, .hk-row .hk-sw[aria-checked="true"] { border-color: var(--green); }
+.hk-sw.on i, .hk-sw[aria-checked="true"] i { background: var(--green); box-shadow: 0 0 8px rgba(var(--green-rgb), 0.7); transform: translateX(16px); }
 .hk-row .hk-sw:disabled { opacity: 0.4; cursor: default; }
 
 /* the last 7 days' active time (xp.js week) */
