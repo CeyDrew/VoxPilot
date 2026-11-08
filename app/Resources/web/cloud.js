@@ -315,11 +315,6 @@ window.Cloud = (() => {
         </div>
         <div class="mn-body">
           <section class="mn-page mn-settings" data-page="settings">
-            <div class="hk-h">ACTIVITY</div>
-            <div class="hk-row"><span>show my active time to friends<small>today, this week and in total · your level shows either way</small></span>
-              <button type="button" class="hk-sw act" role="switch" aria-checked="true" title="Show my active time to friends"><i></i></button></div>
-            <div class="hk-row"><span>show my name on the leaderboard<small>off: you keep your place as Anonymous, and nobody can add you from there</small></span>
-              <button type="button" class="hk-sw brd" role="switch" aria-checked="true" title="Show my name on the leaderboard"><i></i></button></div>
             ${UI ? `<div class="hk-h">INTERFACE</div>
             <div class="hk-row"><span>language<small>the interface's language · the app restarts, your chats keep running</small></span><span class="lb-seg ui-seg ui-lang"></span></div>
             <div class="hk-row"><span>font<small>the dashboard's and the messages' text</small></span><span class="lb-seg ui-seg ui-font"></span></div>
@@ -346,8 +341,6 @@ window.Cloud = (() => {
 
     q('.mn-settings .arc-open')?.addEventListener('click', openArchive);
 
-    q('.hk-sw.act').onclick = toggleActivity;
-    q('.hk-sw.brd').onclick = toggleBoard;
     root.querySelectorAll('.mn-tabs button').forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
     q('.l-close').onclick = close;
     q('.pk-cancel').onclick = close;
@@ -1126,28 +1119,7 @@ window.Cloud = (() => {
   function renderInfo() {
     const el = q('.hk-info');
     if (!el) return;
-    const status = S.updating
-      ? `<em>${esc(S.updating + pct())}</em>`
-      : S.update
-        ? `<em class="${S.xpPaused ? 'bad' : ''}">${esc(S.update.version)} ${S.updateReady ? 'ready · installs when you step away' : `is out · downloading${pct()}`}${S.xpPaused ? ' · XP paused until then' : ''}</em>`
-        : S.checking
-          ? '<em class="dim">checking…</em>'
-          : S.checkedAt
-            ? `<em class="dim">up to date · checked ${ago(S.checkedAt)}</em>`
-            : '';
-    setHTML(
-      el,
-      `<div class="hk-row"><span>version</span><div class="hk-val"><b>${esc(S.version || '?')}</b>${status}</div></div>` +
-        '<div class="hk-row"><span>updates<small>they download by themselves and install when you step away · your chats keep running</small></span><div class="hk-val">' +
-        `<button type="button" class="hk-upd hk-check"${S.checking || S.updating ? ' disabled' : ''}>check for updates</button>` +
-        `${S.update && !S.updating ? '<button type="button" class="hk-upd hk-now">update now</button>' : ''}</div></div>` +
-        `<div class="hk-row"><span>install updates right away<small>off: an update waits until you're away for 10 minutes</small></span>` +
-        `<button type="button" class="hk-sw upd${S.updateRightAway ? ' on' : ''}" role="switch" aria-checked="${!!S.updateRightAway}" title="Install updates as soon as they're downloaded"><i></i></button></div>`,
-    );
-    el.querySelector('.hk-check').onclick = () => call('checkUpdate').then((s) => s && render(s)).catch(() => toast(errorText('offline')));
-    const now = el.querySelector('.hk-now');
-    if (now) now.onclick = openUpdate;
-    el.querySelector('.hk-sw.upd').onclick = () => call('updateRightAway', { on: !S.updateRightAway }).then((s) => s && render(s));
+    setHTML(el, `<div class="hk-row"><span>version</span><div class="hk-val"><b>${esc(S.version || '?')}</b></div></div>`);
   }
 
 

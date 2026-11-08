@@ -1,5 +1,9 @@
 # Değişiklikler
 
+## 1.2.5
+
+- Ayarlar: Etkinlik bölümü kaldırıldı; Uygulama bölümünde güncelleme düğmeleri yok, yalnızca sürüm yazıyor.
+
 ## 1.2.4
 
 - Ayarlar penceresinin başlığından durum (çevrimdışı) ve ad kopyalama düğmeleri kaldırıldı.

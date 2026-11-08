@@ -1,7 +1,7 @@
 {
   "name": "voxpilot",
   "productName": "VoxPilot",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "A HUD for running many AI coding sessions: every session on a live orbit map, each chat in its own window",
   "author": "Voxnup",
   "license": "MIT",
