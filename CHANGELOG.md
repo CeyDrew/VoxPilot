@@ -1,5 +1,9 @@
 # Değişiklikler
 
+## 1.2.3
+
+- Ayarlar'dan hacker adı bölümü kaldırıldı.
+
 ## 1.2.2
 
 - Sol menüden Arkadaşlar, Sıralama, Bildirimler ve Geri bildirim; Ayarlar'dan Profil sekmesi kaldırıldı.

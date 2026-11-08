@@ -316,9 +316,6 @@ window.Cloud = (() => {
         </div>
         <div class="mn-body">
           <section class="mn-page mn-settings" data-page="settings">
-            <div class="hk-h">HACKER NAME</div>
-            <label class="hk-field"><span class="hk-prompt">$</span><input class="hk-input fit" maxlength="${MAX}" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="hacker name"><span class="hk-tag" title="Your tag: names can repeat, name + tag can't">${tagText(S.tag)}</span><span class="hk-count"></span></label>
-            <p class="hk-status"></p>
             <div class="hk-h">ACTIVITY</div>
             <div class="hk-row"><span>show my active time to friends<small>today, this week and in total · your level shows either way</small></span>
               <button type="button" class="hk-sw act" role="switch" aria-checked="true" title="Show my active time to friends"><i></i></button></div>
@@ -345,24 +342,10 @@ window.Cloud = (() => {
           </section>
           ${KEYS ? '<section class="mn-page mn-keys" data-page="keys"></section>' : ''}
         </div>
-        <div class="pk-foot"><span class="pk-sel note">esc to close</span><button class="pk-cancel">close</button><button class="pk-ok mn-save" disabled>save name</button></div>
+        <div class="pk-foot"><span class="pk-sel note">esc to close</span><button class="pk-cancel">close</button></div>
       </div></div>`;
 
-    // settings: the hacker name
-    const settings = q('.mn-settings');
-    settings.querySelector('.arc-open')?.addEventListener('click', openArchive);
-    const own = S.hackerName || '';
-    settings.querySelector('.hk-input').value = own;
-    const ok = q('.mn-save');
-    const f = nameField(settings, own, (ready) => (ok.disabled = !ready));
-    const submit = submitter('rename', f, ok, (name) => {
-      whenState((s) => s.hackerName === name, (s) => toast(`you are ${s.hackerName}${tagText(s.tag)} now`));
-      close();
-    });
-    ok.onclick = submit;
-    f.input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') submit();
-    });
+    q('.mn-settings .arc-open')?.addEventListener('click', openArchive);
 
     q('.hk-sw.act').onclick = toggleActivity;
     q('.hk-sw.brd').onclick = toggleBoard;
@@ -465,10 +448,6 @@ window.Cloud = (() => {
     tab = which;
     root.querySelectorAll('.mn-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === which));
     root.querySelectorAll('.mn-page').forEach((p) => (p.hidden = p.dataset.page !== which));
-    const save = q('.mn-save');
-    if (save) save.hidden = which !== 'settings';
-    const focus = which === 'settings' ? q('.mn-settings .hk-input') : null;
-    if (focus) setTimeout(() => focus.focus(), 60);
     if (which === 'keys') renderKeys();
     if (which === 'settings') {
       renderSaver();
