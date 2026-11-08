@@ -1,5 +1,9 @@
 # Değişiklikler
 
+## 1.2.2
+
+- Sol menüden Arkadaşlar, Sıralama, Bildirimler ve Geri bildirim; Ayarlar'dan Profil sekmesi kaldırıldı.
+
 ## 1.2.1
 
 - Ayarlar: token tasarrufu, yapay zekâ renkleri ve limit düğmeleri açıkken açık görünüyor.

@@ -98,11 +98,7 @@ window.GitView = (() => {
   bar.innerHTML =
     `<a class="vs-ab on" data-view="dash" title="Dashboard">${ci('files')}</a>` +
     `<a class="vs-ab" data-view="git" title="Source Control (${window.__platform === 'win32' ? 'Ctrl+Shift+G' : '⌃⇧G'})">${ci('source-control')}<b class="vs-badge" hidden></b></a>` +
-    `<a class="vs-ab" data-view="friends" title="Friends and messages">${ci('organization')}<b class="vs-badge" hidden></b></a>` +
-    `<a class="vs-ab" data-view="board" title="Leaderboard">${ci('trophy')}</a>` +
-    `<a class="vs-ab" data-view="themes" title="Themes">${ci('symbol-color')}</a>` +
-    `<a class="vs-ab" data-view="notifications" title="Notifications">${ci('bell')}<b class="vs-badge" hidden></b></a>` +
-    `<a class="vs-ab vs-ab-foot" data-view="feedback" title="Send feedback to the developer">${ci('feedback')}</a>`;
+    `<a class="vs-ab" data-view="themes" title="Themes">${ci('symbol-color')}</a>`;
   app.appendChild(bar);
   const view = document.createElement('section');
   view.id = 'git';

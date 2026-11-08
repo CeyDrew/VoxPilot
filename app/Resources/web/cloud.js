@@ -30,7 +30,7 @@ window.Cloud = (() => {
 
   let S = null; // latest state
   let modal = null; // 'first' | 'menu' | 'update' | 'feedback'
-  let tab = 'friends';
+  let tab = 'settings';
   let shownError = null;
   let shownNameError = null;
   let waitFor = null; // { test, then, until }: runs once a state shows the name just sent
@@ -311,12 +311,10 @@ window.Cloud = (() => {
         <div class="pk-title"><span class="lights"><i class="l-close" title="Close"></i><i class="l-min"></i><i class="l-max"></i></span><img class="hk-logo" src="logo.png" alt=""><b>MAIN MENU</b>
           <span class="mn-me"><span class="mn-handle"></span><button class="mn-copy" type="button" title="Copy your name#tag, so friends can add you">⧉</button><button class="mn-status" type="button" title="Your status"></button></span></div>
         <div class="mn-tabs">
-          <button type="button" data-tab="profile">PROFILE</button>
           <button type="button" data-tab="settings">SETTINGS</button>
           ${KEYS ? '<button type="button" data-tab="keys">SHORTCUTS</button>' : ''}
         </div>
         <div class="mn-body">
-          <section class="mn-page mn-profile" data-page="profile"></section>
           <section class="mn-page mn-settings" data-page="settings">
             <div class="hk-h">HACKER NAME</div>
             <label class="hk-field"><span class="hk-prompt">$</span><input class="hk-input fit" maxlength="${MAX}" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="hacker name"><span class="hk-tag" title="Your tag: names can repeat, name + tag can't">${tagText(S.tag)}</span><span class="hk-count"></span></label>
@@ -380,7 +378,7 @@ window.Cloud = (() => {
       if (e.target === root) close();
       else if (!e.target.closest('.mn-pick, .mn-status')) q('.mn-pick')?.remove();
     };
-    showTab(which || 'profile');
+    showTab(which || 'settings');
     renderInfo();
     renderProfile();
     renderActivity();
@@ -1398,7 +1396,7 @@ window.Cloud = (() => {
 
   $('update').addEventListener('click', openUpdate);
   $('settings').addEventListener('click', () => openMenu('settings'));
-  brand.addEventListener('click', () => openMenu('profile'));
+  brand.addEventListener('click', () => openMenu('settings'));
   addEventListener('keydown', (e) => {
     if (!modal && shown === 'themes' && e.key !== 'Escape' && !e.target.closest('input, textarea')) return views.themes.__keys?.(e);
     if (e.key !== 'Escape') return;
