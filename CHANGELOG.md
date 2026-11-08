@@ -1,5 +1,9 @@
 # Değişiklikler
 
+## 1.2.4
+
+- Ayarlar penceresinin başlığından durum (çevrimdışı) ve ad kopyalama düğmeleri kaldırıldı.
+
 ## 1.2.3
 
 - Ayarlar'dan hacker adı bölümü kaldırıldı.

@@ -308,8 +308,7 @@ window.Cloud = (() => {
     root.innerHTML = `
       <div class="mn-wrap"><div class="pk hk menu crt-on">
         <div class="pk-border"></div>
-        <div class="pk-title"><span class="lights"><i class="l-close" title="Close"></i><i class="l-min"></i><i class="l-max"></i></span><img class="hk-logo" src="logo.png" alt=""><b>MAIN MENU</b>
-          <span class="mn-me"><span class="mn-handle"></span><button class="mn-copy" type="button" title="Copy your name#tag, so friends can add you">⧉</button><button class="mn-status" type="button" title="Your status"></button></span></div>
+        <div class="pk-title"><span class="lights"><i class="l-close" title="Close"></i><i class="l-min"></i><i class="l-max"></i></span><img class="hk-logo" src="logo.png" alt=""><b>MAIN MENU</b></div>
         <div class="mn-tabs">
           <button type="button" data-tab="settings">SETTINGS</button>
           ${KEYS ? '<button type="button" data-tab="keys">SHORTCUTS</button>' : ''}
@@ -349,11 +348,6 @@ window.Cloud = (() => {
 
     q('.hk-sw.act').onclick = toggleActivity;
     q('.hk-sw.brd').onclick = toggleBoard;
-    q('.mn-copy').onclick = () => copyHandle();
-    q('.mn-status').onclick = (e) => {
-      e.stopPropagation();
-      statusMenu();
-    };
     root.querySelectorAll('.mn-tabs button').forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
     q('.l-close').onclick = close;
     q('.pk-cancel').onclick = close;
@@ -714,11 +708,6 @@ window.Cloud = (() => {
   function renderSocial() {
     badges();
     const s = Social.state();
-    const me = s?.me;
-    if (modal === 'menu') {
-      setHTML(q('.mn-handle'), S.hackerName ? `${esc(S.hackerName)}<i>${tagText(S.tag)}</i>` : '');
-      setHTML(q('.mn-status'), me ? `${Social.dot(me.status)}<span>${Social.PRESENCE[me.status].label}</span>▾` : `${Social.dot('offline')}<span>offline</span>`);
-    }
     if (shown !== 'friends') return;
     const unread = Social.unread(), requests = Social.requests();
     const online = s ? s.friends.filter((f) => f.presence && f.presence !== 'offline').length : 0;
