@@ -160,12 +160,17 @@ function createTerminals({ onData, onExit, host, extraPath }) {
     },
     /**
      * A terminal for window `id` in `cwd`. With `claudeArgs` ([] for a new chat, ['--resume', id] …) Claude runs first
-     * and the shell stays when it exits; without, it's a plain terminal. `title` goes with it, for its window after a
-     * restart. Known at once (`has`); its process a moment later.
+     * and the shell stays when it exits; with `command` (another AI tool, the user's own), that runs first the same way;
+     * without either, it's a plain terminal. `title` goes with it, for its window after a restart. Known at once (`has`);
+     * its process a moment later.
      */
-    spawn({ id, cwd, claudeArgs, cols = 100, rows = 30, title }) {
+    spawn({ id, cwd, claudeArgs, command, cols = 100, rows = 30, title }) {
       const dir = cwd && fs.existsSync(cwd) ? cwd : os.homedir();
-      const args = claudeArgs ? shell.run(['claude', ...claudeArgs].map((a, i) => (i ? quote(a) : a)).join(' ')) : shell.args;
+      const args = claudeArgs
+        ? shell.run(['claude', ...claudeArgs].map((a, i) => (i ? quote(a) : a)).join(' '))
+        : command
+          ? shell.run(command)
+          : shell.args;
       const t = { cwd: dir, claude: !!claudeArgs, title, pid: null, startedAt: Date.now(), lastIO: Date.now(), pty: null };
       all.set(id, t);
       return ready.then(async () => {

@@ -319,6 +319,8 @@ window.Cloud = (() => {
             <div class="hk-row"><span>language<small>the interface's language · the app restarts, your chats keep running</small></span><span class="lb-seg ui-seg ui-lang"></span></div>
             <div class="hk-row"><span>font<small>the dashboard's and the messages' text</small></span><span class="lb-seg ui-seg ui-font"></span></div>
             <div class="hk-row"><span>text size<small>the dashboard, larger for text too small to read</small></span><span class="lb-seg ui-seg ui-scale"></span></div>
+            <div class="hk-row st-row" hidden><span>new terminal starts<small>what runs first in a new terminal's folder · Shift + new terminal opens a plain one</small></span><span class="lb-seg ui-seg st-seg"></span></div>
+            <div class="hk-row st-cmd-row" hidden><span>your command<small>runs in PowerShell, in the folder · Enter to keep</small></span><label class="hk-field"><span class="hk-prompt">$</span><input class="hk-input st-cmd" maxlength="500" spellcheck="false" autocomplete="off" placeholder="aider --model sonnet"></label></div>
             <div class="hk-row"><span>AI tools in the theme's colours<small>Claude Code, Codex and Antigravity draw in the terminal's colours, so a theme recolours their text too · from their next session</small></span>
               <button type="button" class="hk-sw ui-ai" role="switch" aria-checked="true" title="AI tools in the theme's colours"><i></i></button></div>
             <div class="hk-row"><span>Claude limits in the top bar<small>the 5-hour and weekly limits · adds VoxPilot's status line to Claude Code's settings.json, your own status line still runs through it</small></span>
@@ -526,8 +528,42 @@ window.Cloud = (() => {
       ai.disabled = false;
     }
   }
+  // What a new terminal starts (starter.js, Windows): a plain shell, an AI tool installed here, or the user's command.
+  function showStarter(st) {
+    const row = q('.st-row'), seg = q('.st-seg'), cmdRow = q('.st-cmd-row'), cmd = q('.st-cmd');
+    if (!st || !st.tools || !row || !seg) return;
+    row.hidden = false;
+    const opts = [{ id: 'none', name: 'plain terminal' }, ...st.tools, { id: 'custom', name: 'my command' }];
+    setHTML(seg, opts.map((o) => `<button type="button" data-start="${esc(o.id)}" class="${o.id === st.startWith ? 'on' : ''}">${esc(o.name)}</button>`).join(''));
+    cmdRow.hidden = st.startWith !== 'custom';
+    if (document.activeElement !== cmd) cmd.value = st.command || '';
+  }
+  async function renderStarter() {
+    const seg = q('.st-seg'), cmd = q('.st-cmd');
+    if (!seg) return;
+    seg.onclick = async (e) => {
+      const b = e.target.closest('button[data-start]');
+      if (!b || b.classList.contains('on')) return;
+      showStarter(await uiCall({ type: 'setStarter', startWith: b.dataset.start }).catch(() => null));
+      if (b.dataset.start === 'custom') setTimeout(() => cmd.focus(), 60);
+    };
+    const keep = async () => {
+      showStarter(await uiCall({ type: 'setStarter', command: cmd.value.trim() }).catch(() => null));
+    };
+    cmd.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        keep();
+        cmd.blur();
+        toast(cmd.value.trim() ? 'new terminals run your command' : 'no command · new terminals open plain');
+      }
+    };
+    cmd.onchange = keep;
+    showStarter(await uiCall({ type: 'starter' }).catch(() => null));
+  }
+
   async function renderUI() {
     if (!UI || !q('.ui-font')) return;
+    renderStarter();
     const langEl = q('.ui-lang');
     if (langEl) {
       langEl.onclick = async (e) => {

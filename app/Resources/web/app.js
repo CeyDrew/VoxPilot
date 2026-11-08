@@ -1261,7 +1261,8 @@ $('log').addEventListener('click', (e) => {
   const ln = e.target.closest('.ln');
   if (ln && ln.dataset.sid) focusSession(ln.dataset.sid);
 });
-$('newchat').addEventListener('click', () => native({ type: 'newTerminal' }));
+// Shift: a plain terminal, whatever Settings' new terminal starts with.
+$('newchat').addEventListener('click', (e) => native({ type: 'newTerminal', plain: e.shiftKey }));
 
 // Shared with orbit.js.
 window.RADAR = { CAT, CATS, STATUS, FONT, MAPQ, sessColor, colorIndex, sessName, hexA, fmtTok, fmtUsd, fmtDur, clock, ago, clipT, esc, ctxColor, focusSession, sessionTip, agentTip, stationTip, terminalTip, openTerminal, showTip, hideTip };

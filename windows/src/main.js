@@ -21,6 +21,7 @@ const { createAIColors } = require('./aicolors');
 const { createTerminals, which } = require('./terminals');
 const { createOverlay } = require('./overlay');
 const { createRunaways } = require('./runaways');
+const { createStarter } = require('./starter');
 const { createSavers } = require('./savers');
 const { createChatList } = require('./chatlist');
 const { createLimits } = require('./limits');
@@ -83,6 +84,10 @@ const panels = { notices: null, chats: new Map(), showing: new Set() }; // the m
 
 // The AI tools in the theme's colours (Settings · INTERFACE): Claude Code, Codex and Antigravity on their themes that use
 // the terminal's 16 colours.
+// What a new terminal starts in its folder (Settings · Interface).
+const starter = createStarter({ settings });
+let plainNext = false; // Shift on + new terminal: the folder picked next gets a plain shell
+
 const aiColors = createAIColors({
   settings,
   claudeDir: process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'),
@@ -555,7 +560,7 @@ async function openFolder() {
   if (!d || !fs.existsSync(d)) return null;
   chatlist.pin(d);
   pushChats(true);
-  openChatWindow({ cwd: d, claudeArgs: null, title: path.basename(d) || d });
+  openChatWindow({ cwd: d, ...starter.start(), title: path.basename(d) || d });
   return d;
 }
 
@@ -576,7 +581,7 @@ function handleChats(msg) {
       return openSession(String(msg.id || ''), true);
     case 'newTerminal': {
       const d = dir();
-      if (d) openChatWindow({ cwd: d, claudeArgs: null, title: path.basename(d) });
+      if (d) openChatWindow({ cwd: d, ...starter.start(), title: path.basename(d) });
       return true;
     }
     case 'reveal': {
@@ -704,6 +709,7 @@ function handleRadar(msg) {
     case 'fork':
       return openSession(msg.sid, true);
     case 'newTerminal':
+      plainNext = !!msg.plain;
       return showOverlay('Overlay.newTerminal()');
     case 'openTerminal':
       // A car: its window comes up in front, a closed one too (its terminal ran on out of sight).
@@ -827,7 +833,7 @@ const samePath = (a, b) => !!a && !!b && path.resolve(a).toLowerCase() === path.
  * that outlived the app attaches to it instead (`claude`: whether it was started as a chat), hidden unless `show`.
  */
 let chatCascade = 0;
-function openChatWindow({ id = crypto.randomUUID(), cwd, claudeArgs, claude = !!claudeArgs, sessionId, title, show = true }) {
+function openChatWindow({ id = crypto.randomUUID(), cwd, claudeArgs, command, claude = !!claudeArgs, sessionId, title, show = true }) {
   const home = chatHome(), area = home.workArea;
   const cascade = (chatCascade++ % 6) * 28;
   const place = wholeOnDisplay({ x: area.x + 120 + cascade, y: area.y + 80 + cascade, width: 960, height: 640 }, home);
@@ -838,7 +844,7 @@ function openChatWindow({ id = crypto.randomUUID(), cwd, claudeArgs, claude = !!
     webPreferences: webPrefs(),
   });
   bootFor(win.webContents);
-  const c = { win, sessionId, cwd, claude, claudeArgs, title: title || path.basename(cwd || os.homedir()), startedAt: Date.now(), steppedAside: false };
+  const c = { win, sessionId, cwd, claude, claudeArgs, command, title: title || path.basename(cwd || os.homedir()), startedAt: Date.now(), steppedAside: false };
   chats.set(id, c);
   win.on('focus', () => touchTerminal(id));
   win.loadFile(path.join(__dirname, '..', 'pages', 'terminal.html'));
@@ -1099,7 +1105,7 @@ ipcMain.on('term:ready', (e, { cols, rows }) => {
   if (terminals.has(id)) terminals.attach(id, cols, rows);
   else {
     terminals
-      .spawn({ id, cwd: c.cwd, claudeArgs: c.claudeArgs, cols, rows, title: c.title })
+      .spawn({ id, cwd: c.cwd, claudeArgs: c.claudeArgs, command: c.command, cols, rows, title: c.title })
       .catch((err) => send(c.win, 'term:data', `\r\n\x1b[31m${err.message}\x1b[0m\r\n`));
   }
   send(c.win, 'term:info', chatInfo(id, c));
@@ -1672,6 +1678,8 @@ ipcMain.handle('atl:post', async (e, name, body) => {
       case 'git':
         return await git.handle(body);
       case 'theme':
+        if (body.type === 'starter') return starter.state();
+        if (body.type === 'setStarter') return starter.set(body);
         return themes.handle(body);
       case 'messages':
         return handleMessages(win, body);
@@ -1682,11 +1690,13 @@ ipcMain.handle('atl:post', async (e, name, body) => {
           overPending = null;
           return true;
         }
-        if (body.type === 'done') return hideOverlay(), true;
+        if (body.type === 'done') return hideOverlay(), (plainNext = false), true;
         if (body.type === 'newTerminal') {
           const dir = overlay.expand(String(body.dir || ''));
           hideOverlay();
-          if (dir && fs.existsSync(dir)) openChatWindow({ cwd: dir, claudeArgs: null, title: path.basename(dir) });
+          const plain = plainNext;
+          plainNext = false;
+          if (dir && fs.existsSync(dir)) openChatWindow({ cwd: dir, ...starter.start(plain), title: path.basename(dir) });
           return true;
         }
         return await overlay.handle(body);

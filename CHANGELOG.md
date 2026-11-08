@@ -1,5 +1,9 @@
 # Değişiklikler
 
+## 1.2.6
+
+- Yeni terminal klasöründe ne başlatacağını seçebiliyorsun (Ayarlar · Arayüz · yeni terminal başlatır): boş terminal, bilgisayarda kurulu yapay zekâ araçlarından biri (Claude Code, Codex, Gemini, Aider…) ya da kendi komutun. Varsayılan: Claude Code kuruluysa o, değilse boş terminal. Shift + yeni terminal her zaman boş terminal açar.
+
 ## 1.2.5
 
 - Ayarlar: Etkinlik bölümü kaldırıldı; Uygulama bölümünde güncelleme düğmeleri yok, yalnızca sürüm yazıyor.

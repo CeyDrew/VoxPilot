@@ -186,6 +186,15 @@ const exact = {
   "the dashboard's and the messages' text": 'panonun ve mesajların yazısı',
   'text size': 'yazı boyutu',
   'the dashboard, larger for text too small to read': 'pano, okunamayacak kadar küçük yazılar için daha büyük',
+  'new terminal starts': 'yeni terminal başlatır',
+  "what runs first in a new terminal's folder · Shift + new terminal opens a plain one":
+    'yeni terminalin klasöründe ilk çalışan · Shift + yeni terminal boş terminal açar',
+  'plain terminal': 'boş terminal',
+  'my command': 'kendi komutum',
+  'your command': 'komutun',
+  'runs in PowerShell, in the folder · Enter to keep': "klasörde, PowerShell'de çalışır · kaydetmek için Enter",
+  'new terminals run your command': 'yeni terminaller komutunu çalıştırır',
+  'no command · new terminals open plain': 'komut yok · yeni terminaller boş açılır',
   "AI tools in the theme's colours": 'yapay zekâ araçları temanın renklerinde',
   "Claude Code, Codex and Antigravity draw in the terminal's colours, so a theme recolours their text too · from their next session":
     'Claude Code, Codex ve Antigravity terminalin renklerini kullanır, böylece tema onların yazısını da boyar · bir sonraki oturumlarından itibaren',

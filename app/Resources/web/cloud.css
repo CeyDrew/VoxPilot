@@ -232,6 +232,9 @@
 /* Settings' interface font and text size, as the leaderboard's tabs. */
 .ui-seg { --glow: var(--accent-rgb); }
 .ui-seg button { height: 24px; padding: 0 10px; letter-spacing: 0.06em; }
+/* What a new terminal starts: one button per AI tool installed, so the row wraps when there are many. */
+.st-seg { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; max-width: 62%; }
+.st-cmd-row .hk-field { flex: 0 1 320px; }
 .lb-note { overflow: hidden; color: var(--dim); font-size: 0.9em; white-space: nowrap; text-overflow: ellipsis; }
 .lb-list { display: flex; flex-direction: column; gap: 2px; }
 .lb-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 62px 96px 92px; align-items: center; gap: 10px; min-height: 44px; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
