@@ -4,7 +4,7 @@
    look (their font and colours, from Theme.swift). ===== */
 @font-face { font-family: codicon; src: url("codicon.ttf") format("truetype"); font-display: block; }
 
-#activity, #git {
+#git {
   /* the screen: the dashboard's tokens (style.css) */
   --fg: var(--txt); --desc: var(--dim); --icon: var(--dim); --icon-hi: var(--accent-soft); --focus: var(--accent);
   --side: rgba(var(--panel-rgb), 0.8); --solid: rgb(var(--panel-rgb)); --window: transparent;
@@ -21,31 +21,22 @@
   --code: var(--code-font, Menlo, monospace);
 }
 /* VS Code sizes boxes by their content (the dashboard sizes them by their border). */
-#activity, #activity *, #git, #git *, #git *::before, #git *::after { box-sizing: content-box; }
-#git .vs-ci, #activity .vs-ci { display: inline-block; flex: none; font: normal normal normal 16px/1 codicon; text-align: center; text-decoration: none; text-transform: none; -webkit-font-smoothing: antialiased; user-select: none; color: var(--icon); }
+#git, #git *, #git *::before, #git *::after { box-sizing: content-box; }
+#git .vs-ci { display: inline-block; flex: none; font: normal normal normal 16px/1 codicon; text-align: center; text-decoration: none; text-transform: none; -webkit-font-smoothing: antialiased; user-select: none; color: var(--icon); }
 
-/* In the dashboard's place: its header, its activity bar and its ticker stay as they are, Source Control takes the
+/* In the dashboard's place: its header and its ticker stay as they are, Source Control takes the
    panels' room. */
 #app.git-mode #sessions, #app.git-mode #mapwrap, #app.git-mode #right, #app.git-mode #bottom { display: none; }
 
-/* ---- the dashboard's activity bar ---- */
-#activity { position: relative; grid-row: 2 / 4; grid-column: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 3px; background: var(--side); border: 1px solid var(--border); }
-#activity .vs-ab { position: relative; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; cursor: pointer; }
-#activity .vs-ab .vs-ci { position: relative; font-size: 24px; color: var(--icon); }
-#activity .vs-ab:hover .vs-ci { color: var(--icon-hi); }
-#activity .vs-ab.on .vs-ci { color: var(--focus); }
-#activity .vs-ab.on::before { content: ""; position: absolute; inset: 2px; border-radius: 6px; background: var(--sel); }
-#activity .vs-badge { position: absolute; top: 18px; right: 3px; z-index: 1; min-width: 8px; height: 16px; padding: 0 4px; border-radius: 20px; background: var(--badge); color: var(--badge-fg); font: 600 9px/16px var(--ui); font-style: normal; text-align: center; }
-#activity .vs-badge[hidden] { display: none; }
 
 /* ---- the frame: two panels, a status bar under them, 8 px apart as the dashboard's ---- */
-#git { grid-row: 2 / 4; grid-column: 2 / -1; display: none; flex-direction: column; gap: 8px; min-height: 0; background: var(--window); color: var(--fg); font: 13px var(--ui); }
+#git { grid-row: 2 / 4; grid-column: 1 / -1; display: none; flex-direction: column; gap: 8px; min-height: 0; background: var(--window); color: var(--fg); font: 13px var(--ui); }
 #app.git-mode #git { display: flex; }
 #git .vs-body { position: relative; display: flex; flex: 1; gap: 8px; min-height: 0; }
 #git .vs-card { position: relative; min-width: 0; min-height: 0; border: 1px solid var(--border); }
-#activity::before, #activity::after, #git .vs-card::before, #git .vs-card::after { content: ""; position: absolute; z-index: 5; width: 8px; height: 8px; border: 0 solid var(--focus); pointer-events: none; }
-#activity::before, #git .vs-card::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
-#activity::after, #git .vs-card::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+#git .vs-card::before, #git .vs-card::after { content: ""; position: absolute; z-index: 5; width: 8px; height: 8px; border: 0 solid var(--focus); pointer-events: none; }
+#git .vs-card::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+#git .vs-card::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
 #git .vs-left { display: flex; flex: none; background: var(--side); }
 #git .vs-sb { position: relative; display: flex; flex-direction: column; flex: none; width: var(--sw, 300px); min-height: 0; }
 #git .vs-sash-v { position: absolute; top: 0; bottom: 0; left: calc(var(--sw, 300px) + 4px); z-index: 30; width: 4px; cursor: ew-resize; }

@@ -1,0 +1,65 @@
+/* ===== the terminals as tabs in the dashboard's middle (tabs.js; Windows) ===== */
+/* orbit | terminals, at the middle's top right */
+#vt-switch { position: absolute; top: 0; right: 0; z-index: 7; display: flex; height: 22px; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); background: rgba(var(--bg-rgb), 0.92); }
+#vt-switch[hidden] { display: none; }
+#vt-switch button { display: flex; align-items: center; gap: 4px; height: 100%; padding: 0 7px; border: 0; background: none; color: var(--dim); font: inherit; letter-spacing: 0.04em; cursor: pointer; }
+#vt-switch button:hover { color: var(--hi); }
+#vt-switch button.on { background: var(--accent); color: var(--ink); font-weight: 700; }
+#vt-switch b { min-width: 0; font-weight: 700; }
+#vt-switch b:empty { display: none; }
+#vt-switch svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+#vt-switch.wait button[data-v="term"] { color: var(--warn); animation: vt-pulse 1.2s ease-in-out infinite; }
+
+/* the terminals' part: the strip, the pane under it (the app lays the terminal in front over the pane) */
+#vt { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; background: var(--code-bg, rgb(var(--bg-rgb))); }
+#vt[hidden] { display: none; }
+#mapwrap.vt-on > :not(#vt):not(#vt-switch) { visibility: hidden; }
+/* the head, as the dashboard's panels: the tag, the count; orbit | terminals sits at its right */
+.vt-head { flex: none; display: flex; align-items: center; gap: 8px; height: 22px; padding-right: 64px; border-bottom: 1px solid var(--line-soft, var(--line)); background: rgba(var(--bg-rgb), 0.96); }
+.vt-tag { display: flex; align-items: center; height: 100%; padding: 0 8px; background: var(--accent); color: var(--ink); font-weight: 700; letter-spacing: 0.04em; }
+.vt-meta { min-width: 0; overflow: hidden; color: var(--dim); font-size: 0.9em; font-style: normal; white-space: nowrap; text-overflow: ellipsis; }
+.vt-strip { --st: var(--line); position: relative; flex: none; display: flex; align-items: flex-end; gap: 2px; height: 30px; padding: 0 6px 0 4px; border-bottom: 1px solid var(--st); background: rgba(var(--bg-rgb), 0.96); }
+.vt-strip[data-st="busy"] { --st: var(--accent); }
+.vt-strip[data-st="idle"], .vt-strip[data-st="terminal"] { --st: var(--cyan); }
+.vt-strip[data-st="waiting"] { --st: var(--warn); }
+.vt-tabs { flex: 1 1 auto; display: flex; align-items: flex-end; gap: 2px; min-width: 0; overflow: hidden; }
+.vt-tab { --c: var(--dim); position: relative; flex: 0 1 auto; display: flex; align-items: center; gap: 6px; min-width: 70px; max-width: 230px; height: 26px; padding: 0 4px 0 9px; border: 1px solid var(--line); border-top: 2px solid var(--c); border-bottom: 0; background: rgba(var(--panel-rgb), 0.55); color: var(--txt3); cursor: default; user-select: none; }
+.vt-tab.st-busy { --c: var(--accent); }
+.vt-tab.st-idle, .vt-tab.st-terminal { --c: var(--cyan); }
+.vt-tab.st-waiting { --c: var(--warn); }
+.vt-tab.st-ended { --c: var(--dim2); }
+.vt-tab:hover { color: var(--hi); background: rgba(var(--panel-rgb), 0.85); }
+.vt-tab.on { height: 29px; margin-bottom: -1px; border-color: var(--st); border-top-color: var(--c); background: var(--code-bg, rgb(var(--panel-rgb))); color: var(--hi); }
+.vt-tab.st-waiting:not(.on) { animation: vt-pulse 1.2s ease-in-out infinite; }
+.vt-tab.dragging { opacity: 0.35; }
+/* a narrow tab keeps its name: the status shows in its colours only */
+.vt-tab { container-type: inline-size; flex: 0 1 200px; min-width: 64px; }
+@container (max-width: 100px) { .vt-tab em { display: none; } }
+.vt-tab .dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--c); box-shadow: 0 0 6px var(--c); }
+.vt-rename { flex: 1 1 auto; min-width: 40px; height: 18px; padding: 0 4px; border: 1px solid var(--accent); background: rgba(var(--bg-rgb), 0.9); color: var(--hi); font: inherit; font-weight: 600; outline: none; }
+.vt-tab .nm { flex: 0 1 auto; min-width: 24px; overflow: hidden; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.vt-tab em { flex: 0 3 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--c); font-size: 0.82em; font-style: normal; white-space: nowrap; }
+.vt-tab button { flex: none; display: flex; width: 18px; height: 18px; padding: 3px; border: 0; background: none; color: var(--dim); cursor: pointer; opacity: 0.5; }
+.vt-tab:hover button, .vt-tab.on button { opacity: 1; }
+.vt-tab button:hover { color: var(--hi); background: rgba(var(--accent-rgb), 0.14); }
+.vt-tab button svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.vt-mark { position: absolute; bottom: 2px; width: 2px; height: 26px; background: var(--accent); box-shadow: 0 0 8px var(--accent); pointer-events: none; }
+.vt-mark[hidden] { display: none; }
+
+.vt-pane { position: relative; flex: 1; min-height: 0; }
+.vt-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--dim); text-align: center; }
+.vt-empty[hidden] { display: none; }
+.vt-empty b { color: var(--hi); }
+.vt-cover { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--accent); background: rgba(var(--accent-rgb), 0.08); }
+.vt-cover[hidden] { display: none; }
+.vt-cover span { padding: 2px 8px; background: var(--accent); color: var(--ink); font-weight: 700; }
+
+/* what's being dragged, beside the pointer */
+#vt-ghost { position: fixed; left: 0; top: 0; z-index: 2000; display: flex; flex-direction: column; gap: 2px; max-width: 260px; padding: 5px 9px; border: 1px solid var(--accent); background: rgba(var(--panel-rgb), 0.95); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); color: var(--hi); pointer-events: none; }
+#vt-ghost[hidden] { display: none; }
+#vt-ghost b { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#vt-ghost span { color: var(--accent-soft, var(--accent)); font-size: 0.86em; }
+#vt-ghost.out { border-style: dashed; }
+html.vt-dragging, html.vt-dragging * { cursor: grabbing !important; user-select: none !important; }
+
+@keyframes vt-pulse { 50% { box-shadow: inset 0 0 0 1px var(--warn), 0 0 10px rgba(255, 46, 99, 0.35); } }

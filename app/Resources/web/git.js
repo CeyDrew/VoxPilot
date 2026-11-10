@@ -1,7 +1,7 @@
 'use strict';
 
 // Source Control, as it looks in the user's VS Code: 1.144's modern look (its floating cards, 28 px view headers, rows
-// rounded and set in 4 px), the GitHub Dark Default theme and the Material Icon Theme. The activity bar opens it (⌃⇧G).
+// rounded and set in 4 px), the GitHub Dark Default theme and the Material Icon Theme. The top bar's button opens it (⌃⇧G).
 // Changes lists every repo today's sessions and the app's terminals work in: its message box, its Commit button, its
 // staged changes and its changes. Graph below is VS Code's history graph (its lanes, colours and badges, the branch's
 // base included) of the repo last used; a commit opens to the files it changed. A file opens in the editor
@@ -89,16 +89,10 @@ window.GitView = (() => {
   const basename = (p) => p.slice(p.lastIndexOf('/') + 1);
   const dirname = (p) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
 
-  // ---------- the frame: activity bar, side bar (CHANGES and GRAPH), editor ----------
-  // The activity bar switches what the dashboard's middle shows: the dashboard, Source Control (here), friends and
-  // messages, the leaderboard, the themes or the notifications (cloud.js); feedback, at its foot, opens its window over
-  // whatever shows.
-  const bar = document.createElement('nav');
-  bar.id = 'activity';
-  bar.innerHTML =
-    `<a class="vs-ab on" data-view="dash" title="Dashboard">${ci('files')}</a>` +
-    `<a class="vs-ab" data-view="git" title="Source Control (${window.__platform === 'win32' ? 'Ctrl+Shift+G' : '⌃⇧G'})">${ci('source-control')}<b class="vs-badge" hidden></b></a>`;
-  app.appendChild(bar);
+  // ---------- the frame: side bar (CHANGES and GRAPH), editor ----------
+  // The top bar's button switches between the dashboard and Source Control (here), in the panels' room.
+  const btn = document.getElementById('scm');
+  btn.title = `Source Control (${WIN ? 'Ctrl+Shift+G' : '⌃⇧G'})`;
   const view = document.createElement('section');
   view.id = 'git';
   view.innerHTML =
@@ -186,10 +180,10 @@ window.GitView = (() => {
   }
 
   const unique = (files) => new Set(files.map((f) => f.path)).size;
-  // The changed files' count, on Source Control's own icon only (friends and notifications have theirs, cloud.js).
+  // The changed files' count, on the top bar's button.
   function badge() {
     const n = repos.reduce((a, r) => a + unique(r.files), 0);
-    const b = bar.querySelector('[data-view=git] .vs-badge');
+    const b = btn.querySelector('b');
     b.hidden = !n;
     b.textContent = n > 99 ? '99+' : n;
   }
@@ -1098,8 +1092,8 @@ window.GitView = (() => {
     setOpen(true);
   }
 
-  const mark = (v) => bar.querySelectorAll('.vs-ab').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
-  // One of the activity bar's views: Source Control's here; friends, the leaderboard, the themes and the notifications
+  const mark = (v) => btn.classList.toggle('on', v === 'git');
+  // One of the views in the panels' room: Source Control's here; friends, the leaderboard, the themes and the notifications
   // in cloud.js.
   function switchTo(v) {
     if (v === 'feedback') return window.Cloud?.openFeedback();
@@ -1110,10 +1104,7 @@ window.GitView = (() => {
     } else window.Cloud?.showView(null);
   }
 
-  bar.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-view]');
-    if (b) switchTo(b.dataset.view);
-  });
+  btn.addEventListener('click', () => setOpen(!open));
   addEventListener('keydown', (e) => {
     // ⌃⇧G opens it, as in VS Code; Esc goes back to the dashboard.
     if (e.ctrlKey && e.shiftKey && e.code === 'KeyG') return setOpen(!open);

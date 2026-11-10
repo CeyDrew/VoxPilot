@@ -56,7 +56,14 @@ window.PanelLayout = (() => {
   const isHidden = (id) => L.hidden.includes(id);
 
   // ---------- applying it ----------
+  // The bottom row's last panel stands under the right column, as wide as it: one column down the right edge. The
+  // right column's width (its line, or the line before that panel) sizes both.
+  const paired = () => {
+    if (!L.right.some((id) => !isHidden(id) && panel(id))) return null;
+    return L.bottom.filter((id) => !isHidden(id) && panel(id)).at(-1) || null;
+  };
   function flexOf(id, area) {
+    if (area === 'bottom' && id === paired()) return '0 0 var(--right-w, 22%)';
     const g = L.grow[id];
     if (g > 0) return `${g} 1 0px`;
     const d = DEFAULT_GROW[id];
@@ -152,6 +159,14 @@ window.PanelLayout = (() => {
     e.preventDefault();
     const box = s.parentElement;
     const a = box.id === 'right' ? 'right' : 'bottom';
+    // The line before the panel under the right column moves the right column's edge.
+    if (a === 'bottom' && s.dataset.b === paired()) {
+      s.setPointerCapture(e.pointerId);
+      s.classList.add('on');
+      drag = { kind: 'grid', k: 'right' };
+      app.classList.add('pl-sizing', 'pl-cols');
+      return;
+    }
     const axis = AREAS[a].axis;
     const size = (el) => (axis === 'y' ? el.getBoundingClientRect().height : el.getBoundingClientRect().width);
     // Every panel there takes its share as it is now, so moving this line moves nothing else.
@@ -265,7 +280,13 @@ window.PanelLayout = (() => {
     put(grid.bottom, map && bottom ? { x: bottom.left, y: map.bottom, w: bottom.width, h: bottom.top - map.bottom } : null);
     put(grid.sess, ses && map ? { x: ses.right, y: ses.top, w: map.left - ses.right, h: ses.height } : null);
   }
-  const ro = new ResizeObserver(() => placeGridSashes());
+  // The right column's width, for the panel under it.
+  const rightEl = document.getElementById('right');
+  const ro = new ResizeObserver(() => {
+    const w = rightEl?.getBoundingClientRect().width;
+    if (w > 0) app.style.setProperty('--right-w', `${w}px`);
+    placeGridSashes();
+  });
   for (const id of ['sessions', 'mapwrap', 'right', 'bottom']) {
     const el = document.getElementById(id);
     if (el) ro.observe(el);

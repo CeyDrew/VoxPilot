@@ -131,17 +131,21 @@ function handleState(next) {
 }
 // What the user can see decides the work: the app reports whether the dashboard is visible and in front;
 // a hidden page pauses CSS animations and the 3D view.
+let VIS = [true, true];
 function setVisibility(visible, focused) {
+  VIS = [visible, focused];
   document.documentElement.classList.toggle('paused', !visible);
   document.documentElement.classList.toggle('behind', visible && !focused);
-  map('activity', visible, focused);
+  // The map rests while the terminals' tabs are over it (tabs.js).
+  map('activity', visible && !(window.Tabs && Tabs.covers()), focused);
 }
+const refreshVisibility = () => setVisibility(...VIS);
 function setActiveSession(sid) {
   ACTIVE_SID = sid || null;
   if (STATE) renderTop();
 }
 function connect() {
-  window.__radar = { init: handleInit, state: handleState, events: (list) => list.forEach(onEvent), visibility: setVisibility, power: (on) => map('power', on), activeSession: setActiveSession, cloud: (c) => window.Cloud?.render(c), social: (ev) => window.Social?.event(ev), terminals: (list) => map('terminals', list), terminalGone: (id) => map('terminalGone', id), idle: (s) => map('idle', s), openUpdate: () => window.Cloud?.openUpdate(), openProfile: () => window.Cloud?.openMenu('settings'), openSettings: (tab) => window.Cloud?.openMenu(tab || 'settings'), openView: (v) => window.GitView?.view(v), runaways: (list) => { window.Danger?.update(list); map('runaways', list); }, openDanger: () => window.Danger?.open() };
+  window.__radar = { init: handleInit, state: handleState, events: (list) => list.forEach(onEvent), visibility: setVisibility, power: (on) => map('power', on), activeSession: setActiveSession, cloud: (c) => window.Cloud?.render(c), social: (ev) => window.Social?.event(ev), terminals: (list) => map('terminals', list), terminalGone: (id) => map('terminalGone', id), idle: (s) => map('idle', s), openUpdate: () => window.Cloud?.openUpdate(), openProfile: () => window.Cloud?.openMenu('settings'), openSettings: (tab) => window.Cloud?.openMenu(tab || 'settings'), openView: (v) => window.GitView?.view(v), runaways: (list) => { window.Danger?.update(list); map('runaways', list); }, openDanger: () => window.Danger?.open(), tabs: (t) => window.Tabs?.update(t) };
   native({ type: 'ready' });
 }
 

@@ -186,6 +186,7 @@ function createChatList({ settings }) {
       changed();
     },
 
+    isFavorite: (id) => favorites.has(id),
     toggleFavorite(id) {
       const item = find(id);
       if (!item) return;

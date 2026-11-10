@@ -33,6 +33,9 @@
   } catch {}
   const size = () => ({ cols: term.cols, rows: term.rows });
   const refit = () => {
+    // A tab that isn't on screen has no size: fitting it would hand the shell a terminal a few columns wide.
+    const box = document.getElementById('term');
+    if (box.clientWidth < 120 || box.clientHeight < 60) return;
     try {
       fit.fit();
     } catch {}
@@ -49,7 +52,7 @@
   term.onResize(({ cols, rows }) => atl.send('term:resize', { cols, rows }));
   term.onData((data) => atl.send('term:input', data));
   // The AI tool running in this window, as the app tells it (term:info), for the keys it needs.
-  let tool = null;
+  let tool = null, claudeHere = false;
   // Claude Code's command strip (Settings · Shortcuts): a chip per shortcut while Claude runs here; a click, or Ctrl+1…9
   // for the first nine, types the command into Claude's prompt, and sends it too when the shortcut says so.
   const strip = document.getElementById('cmds');
@@ -253,11 +256,28 @@
     if (!e.shiftKey && (k === 'n' || k === 'k' || k === 'w')) return false;
     return k !== 'v';
   });
+  // A picture on the clipboard and no text: the paste carries nothing xterm.js can type, so the program is handed the
+  // key it reads the clipboard's picture with: Alt+V for Claude Code on Windows, else Ctrl+V's own ^V.
+  // Files copied in File Explorer are no picture: the app reads their paths (the page can't) and they're pasted
+  // quoted, as text, which Claude Code takes an image's path as the image from.
+  document.addEventListener('paste', (e) => {
+    const d = e.clipboardData;
+    if (!d || d.getData('text/plain')) return;
+    if (![...d.items].some((i) => i.kind === 'file')) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    atl.send('term:clipFiles');
+  }, true);
+  atl.on('term:clipFiles', (paths) => {
+    if (Array.isArray(paths) && paths.length) return term.paste(paths.map((p) => (/\s/.test(p) ? `"${p}"` : p)).join(' ') + ' ');
+    atl.send('term:input', claudeHere ? '\x1bv' : '\x16');
+  });
   atl.on('term:data', (data) => term.write(data));
   atl.on('term:exit', () => term.write('\r\n\x1b[2m[ended]\x1b[0m\r\n'));
   const STATUS = { busy: ['WORKING', '--accent'], idle: ['YOUR TURN', '--cyan'], waiting: ['NEEDS YOU', '--warn'], terminal: ['TERMINAL', '--cyan'], ended: ['ENDED', '--ended'] };
   atl.on('term:info', (i) => {
     tool = i.tool || null;
+    claudeHere = !!i.claude && i.status !== 'ended';
     showStrip(!!i.claude && i.status !== 'ended', i.shortcuts || []);
     document.getElementById('title').textContent = i.title || 'terminal';
     document.title = `${i.title || 'terminal'} · VoxPilot`;
@@ -267,7 +287,14 @@
     document.body.style.setProperty('--st', `var(${color})`);
   });
   document.getElementById('hud').addEventListener('mousedown', (e) => e.preventDefault());
-  document.getElementById('dash').onclick = () => {
+  // A tab on the dashboard opens in a window of its own; a window goes back to being a tab.
+  const dashBtn = document.getElementById('dash');
+  atl.on('term:mode', ({ docked }) => {
+    dashBtn.textContent = docked ? 'window' : 'tab';
+    dashBtn.title = docked ? 'Open in a window of its own (this keeps running)' : 'Put it back as a tab on the dashboard';
+    document.body.classList.toggle('docked', !!docked);
+  });
+  dashBtn.onclick = () => {
     term.focus();
     atl.send('term:dashboard');
   };

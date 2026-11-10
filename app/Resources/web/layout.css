@@ -9,14 +9,14 @@
 .pl-panel.pl-hidden, .pl-panel.pl-dragging { display: none !important; }
 
 /* the page's parts' sizes, when one was dragged */
-#app.lay-w { grid-template-columns: 48px var(--lay-sess, minmax(250px, 21%)) minmax(0, 1fr) var(--lay-right, minmax(270px, 23%)); }
+#app.lay-w { grid-template-columns: var(--lay-sess, minmax(250px, 21%)) minmax(0, 1fr) var(--lay-right, minmax(220px, 22%)); }
 #app.lay-h { grid-template-rows: auto minmax(0, 1fr) var(--lay-bottom, minmax(176px, 27vh)) 22px; }
 @media (max-width: 1250px) {
-  #app.lay-w { grid-template-columns: 48px var(--lay-sess, minmax(230px, 26%)) minmax(0, 1fr) var(--lay-right, minmax(240px, 26%)); }
+  #app.lay-w { grid-template-columns: var(--lay-sess, minmax(230px, 26%)) minmax(0, 1fr) var(--lay-right, minmax(220px, 22%)); }
 }
 /* every panel hidden from the column or the row: the map (and the column) take its room */
 #app.no-right #right, #app.no-bottom #bottom { display: none; }
-#app.no-right #mapwrap { grid-column: 3 / -1; }
+#app.no-right #mapwrap { grid-column: 2 / -1; }
 #app.no-bottom #sessions, #app.no-bottom #mapwrap, #app.no-bottom #right { grid-row: 2 / 4; }
 
 /* the lines between panels */

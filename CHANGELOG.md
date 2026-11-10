@@ -1,7 +1,17 @@
 # Değişiklikler
 
-## 1.2.7
+## 1.2.9
 
+- Terminaller panonun ortasında sekmelerde: üst sağdaki yörünge ve terminaller ikonlarıyla harita ve terminaller yer değiştirir. Yeni terminal, oturum kartına tıklama, tepsideki ve köşedeki bildirimler terminali sekmede açar.
+- Sol menü kaldırıldı: Kaynak Denetimi üst çubuktaki dal ikonlu düğmede (yanında değişen dosya sayısı). Tıkla ya da Ctrl+Shift+G: açılır, açıkken düğme yanar; yeniden tıkla, Ctrl+Shift+G ya da Esc: panoya döner. Kazanılan yer oturum kartlarına gitti.
+- Sağ sütun (araştırma akışı, dosya ısısı, araç dağılımı) altındaki panelle (senin kararın) aynı genişlikte, tek sütun gibi hizalı. Sağ sütunun ya da o panelin solundaki çizgiyi sürükleyince ikisi birlikte genişler.
+- Terminallerin üstünde panolardaki gibi başlık: "terminaller", sekme sayısı, seni bekleyen ve sırası sende olan oturum sayısı.
+- Sekmede durum rengi ve kısa durum yazısı var; seni bekleyen arka sekme yanıp söner. Ctrl+Tab / Ctrl+Shift+Tab ile sekmeler arasında geçilir; Ctrl+W ya da × sekmeyi kapatır, oturum çalışmaya devam eder.
+- Sekmeyi şeritte sürükleyince sırası değişir; şeritten dışarı çekince, çift tıklayınca ya da ⇱ ile kendi penceresinde açılır. Pencereyi başlığından tutup şeride bırakınca ya da "sekme yap" ile yeniden sekme olur. Oturum kartını şeride ya da terminalin üstüne sürükleyince sekmede açılır.
+- Sekmeler, sıraları ve öndeki sekme uygulama yeniden açılınca geri gelir.
+- Terminale Ctrl+V ile resim yapıştırılıyor: ekran görüntüsü ya da kopyalanan resim Claude Code'a resim yapıştırma tuşuyla (Alt+V) gider; Dosya Gezgini'nde kopyalanan dosyaların yolu tırnak içinde yazılır, Claude Code resmi [Image #1] olarak ekler.
+- Arkadaki sekmeler uygulama açılırken birkaç sütun genişliğine düşmüyor (Claude'un çıktısı alt alta harf harf dizilmiyordu).
+- Sekmeye sağ tık: sohbet listesindeki menü (yeniden adlandır, favorilere ekle, arşivle, pencerede aç, kopyasını aç, bu klasörde yeni terminal, klasörü göster, oturum kimliğini kopyala) ve sekmeyi kapat, terminali bitir. Yeniden adlandır adı sekmenin üstünde düzenletir.
 - Ayarlar yeni düzende: solda Genel, Temalar ve Kısayollar. Temalar sol menüden Ayarlar'a taşındı.
 - Claude Code açık terminalin üstünde komut şeridi: /compact, /clear, /review… Tıkla ya da Ctrl+1…9. Komutlar, adları, yaz ya da hemen gönder ve sıraları Ayarlar · Kısayollar'dan değişir. Şeride sığmayanlar "⋯ N daha" düğmesinin altında.
 - Ayarlar · Genel · Talimatlar: yazdıkların açtığın yapay zekâ oturumlarına verilir (Claude Code, Codex, Gemini ve Antigravity; nerede açılırsa açılsın). Yeni oturumlardan itibaren geçerli.
