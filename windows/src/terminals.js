@@ -184,6 +184,8 @@ function createTerminals({ onData, onExit, host, extraPath }) {
           throw new Error(r.message || "the session host couldn't start it");
         }
         t.pid = r.pid;
+        // A resize that reached the host before the session did was lost: the window's size now, if it changed.
+        if (t.size && (t.size.cols !== cols || t.size.rows !== rows)) link.send({ t: 'resize', id, ...t.size });
       });
     },
     /** The host's sessions that outlived the last launch, now known here: their windows attach to them. */
@@ -210,14 +212,18 @@ function createTerminals({ onData, onExit, host, extraPath }) {
     attach(id, cols, rows) {
       const t = all.get(id);
       if (!t || t.pty || t.pid == null || !link) return;
+      t.size = { cols, rows };
       link.request({ t: 'attach', id }).then((r) => {
         if (r.t === 'error') {
           if (all.delete(id)) onExit(id, 1);
           return;
         }
-        if (!(cols > 0 && rows > 1) || !link) return;
-        link.send({ t: 'resize', id, cols, rows: rows - 1 });
-        setTimeout(() => link && link.send({ t: 'resize', id, cols, rows }), 60);
+        // The window's size by now, not the one it attached with: the command strip can come in over the terminal
+        // meanwhile, and the old size would leave the program drawing more rows than the window shows.
+        const now = t.size;
+        if (!(now.cols > 0 && now.rows > 1) || !link) return;
+        link.send({ t: 'resize', id, cols: now.cols, rows: now.rows - 1 });
+        setTimeout(() => link && link.send({ t: 'resize', id, ...t.size }), 60);
       });
     },
     write(id, data) {
@@ -230,6 +236,7 @@ function createTerminals({ onData, onExit, host, extraPath }) {
     resize(id, cols, rows) {
       const t = all.get(id);
       if (!t || !(cols > 0 && rows > 0)) return;
+      t.size = { cols, rows };
       if (t.pty) t.pty.resize(cols, rows);
       else if (link) link.send({ t: 'resize', id, cols, rows });
     },

@@ -186,6 +186,56 @@ const exact = {
   "the dashboard's and the messages' text": 'panonun ve mesajların yazısı',
   'text size': 'yazı boyutu',
   'the dashboard, larger for text too small to read': 'pano, okunamayacak kadar küçük yazılar için daha büyük',
+  // ---------- Settings: its sections ----------
+  'General': 'Genel',
+  'Shortcuts': 'Kısayollar',
+  'App keys': 'Uygulama tuşları',
+  'Settings sections': 'Ayar bölümleri',
+  'your instructions, the interface, terminals, token savers and chats': 'talimatların, arayüz, terminaller, token tasarrufu ve sohbetler',
+  'point to try · click to keep · terminals too, the orbit map keeps its colours':
+    'denemek için üzerine gel · seçmek için tıkla · terminaller de değişir, yörünge haritası kendi renklerini korur',
+  "Claude Code's commands on top of its terminal window · the first nine are Ctrl+1…9":
+    "Claude Code'un komutları, terminal penceresinin üstünde · ilk dokuzu Ctrl+1…9",
+  "the keys of the app's actions": 'uygulamanın eylemlerinin tuşları',
+  'Close (esc)': 'Kapat (esc)',
+  // Settings · General · Instructions
+  'INSTRUCTIONS': 'TALİMATLAR',
+  'Instructions': 'Talimatlar',
+  'What every AI session you open should know, e.g.\nAnswer in Turkish. Explain the plan before changing code. Never push without asking.':
+    "Açtığın her yapay zekâ oturumunun bilmesi gerekenler, örneğin:\nTürkçe cevap ver. Kodu değiştirmeden önce planı anlat. Sormadan push etme.",
+  'give them to the AI sessions': 'yapay zekâ oturumlarına ver',
+  'Give the instructions to the AI sessions': 'Talimatları yapay zekâ oturumlarına ver',
+  'every session gets them, wherever you open it: VoxPilot, VS Code or any terminal, and the ones other programs start too · off takes them out of every tool':
+    'nerede açarsan aç her oturum alır: VoxPilot, VS Code ya da herhangi bir terminal, başka programların başlattıkları da · kapatınca hepsinden çıkarılır',
+  'no AI tool found on this PC': 'bu bilgisayarda yapay zekâ aracı bulunamadı',
+  'saved · new sessions get it': 'kaydedildi · yeni oturumlar alır',
+  'empty · nothing is given': 'boş · hiçbir şey verilmiyor',
+  'saved · off': 'kaydedildi · kapalı',
+  'on · new sessions get it': 'açık · yeni oturumlar alır',
+  'off · taken out of every AI tool': 'kapalı · tüm yapay zekâ araçlarından çıkarıldı',
+  // Settings · Shortcuts, and the terminal's command strip
+  'strip': 'şerit',
+  'command': 'komut',
+  'label': 'ad',
+  'on click': 'basınca',
+  'keys': 'tuş',
+  'type': 'yaz',
+  'Command': 'Komut',
+  'Label': 'Ad',
+  'On the strip': 'Şeritte',
+  "Typed into Claude's prompt, you press Enter": "Claude'un giriş satırına yazılır, Enter'a sen basarsın",
+  'Typed and sent at once': 'Yazılır ve hemen gönderilir',
+  'Up': 'Yukarı',
+  'Down': 'Aşağı',
+  'Remove': 'Kaldır',
+  '+ add shortcut': '+ kısayol ekle',
+  'back to the defaults': 'varsayılanlara dön',
+  'no shortcuts · add one': 'kısayol yok · bir tane ekle',
+  '+ add': '+ ekle',
+  'customize': 'düzenle',
+  'Add a shortcut (Settings · Shortcuts)': 'Kısayol ekle (Ayarlar · Kısayollar)',
+  'Edit the shortcuts (Settings · Shortcuts)': 'Kısayolları düzenle (Ayarlar · Kısayollar)',
+  'Claude Code commands': 'Claude Code komutları',
   'new terminal starts': 'yeni terminal başlatır',
   "what runs first in a new terminal's folder · Shift + new terminal opens a plain one":
     'yeni terminalin klasöründe ilk çalışan · Shift + yeni terminal boş terminal açar',
@@ -201,6 +251,14 @@ const exact = {
   'Claude limits in the top bar': 'üst çubukta Claude limitleri',
   "the 5-hour and weekly limits · adds VoxPilot's status line to Claude Code's settings.json, your own status line still runs through it":
     "5 saatlik ve haftalık limitler · Claude Code'un settings.json dosyasına VoxPilot'un durum satırını ekler, kendi durum satırın onun içinden çalışmaya devam eder",
+  'start with Windows': 'Windows ile başlat',
+  'Start with Windows': 'Windows ile başlat',
+  'VoxPilot waits in the tray from the moment you sign in · closing the window keeps it there too, right-click its icon to quit':
+    'oturum açtığın anda VoxPilot tepside bekler · pencereyi kapatınca da orada kalır, kapatmak için simgesine sağ tıkla',
+  // The tray's note, the first time the dashboard goes there (main.js).
+  'VoxPilot is still running': 'VoxPilot çalışmaya devam ediyor',
+  'It stays in the tray and tells you when a session waits for you. Right-click its icon to quit.':
+    'Tepside duruyor, bir oturum seni beklediğinde haber verir. Kapatmak için simgesine sağ tıkla.',
   'TOKEN SAVERS': 'TOKEN TASARRUFU',
   'rtk · shorter command output for Claude Code, Codex and Antigravity': 'rtk · Claude Code, Codex ve Antigravity için daha kısa komut çıktısı',
   'caveman · short answers from Claude Code, Codex and Antigravity': "caveman · Claude Code, Codex ve Antigravity'den kısa yanıtlar",
@@ -248,6 +306,10 @@ const exact = {
   'version': 'sürüm',
   'updates': 'güncellemeler',
   'they download by themselves and install when you step away · your chats keep running': 'kendiliğinden iner, sen uzaklaşınca kurulur · sohbetlerin çalışmaya devam eder',
+  'from GitHub · they download by themselves and install when you step away · your chats keep running':
+    "GitHub'dan · kendiliğinden iner, sen uzaklaşınca kurulur · sohbetlerin çalışmaya devam eder",
+  'update failed · try again': 'güncelleme başarısız · tekrar dene',
+  'Install updates as soon as they\'re downloaded': 'Güncellemeleri iner inmez kur',
   'check for updates': 'güncellemeleri denetle',
   'install updates right away': 'güncellemeleri hemen kur',
   "off: an update waits until you're away for 10 minutes": 'kapalı: güncelleme sen 10 dakika uzaklaşana kadar bekler',
@@ -255,6 +317,7 @@ const exact = {
   'UPDATE AVAILABLE': 'GÜNCELLEME VAR',
   'later': 'sonra',
   'update now': 'şimdi güncelle',
+  'update': 'güncelle',
   'restarts the app · chats keep running': 'uygulamayı yeniden başlatır · sohbetler çalışmaya devam eder',
   'NEW OPERATOR': 'YENİ OPERATÖR',
   'first launch': 'ilk açılış',
@@ -489,6 +552,12 @@ const DAYS = { mon: 'Pzt', tue: 'Sal', wed: 'Çar', thu: 'Per', fri: 'Cum', sat:
 
 // Whole strings with numbers or names in them: [regular expression, replacement], tried in order.
 const patterns = [
+  // The terminal's command strip: what doesn't fit, under one button (pages/terminal.js).
+  ['^⋯ (\\d+) more$', '⋯ $1 daha'],
+  ['^up to date · checked (.+)$', 'güncel · $1 denetlendi'],
+  ['^(\\S+) ready · installs when you step away$', '$1 hazır · sen uzaklaşınca kurulur'],
+  ['^(\\S+) is out · downloading(.*)$', '$1 çıktı · iniyor$2'],
+  ['^from their next session · (.+)$', 'bir sonraki oturumlarından itibaren · $1'],
   ['^(\\S+) live · (\\S+) agents running · (\\S+) sessions today$', '$1 canlı · $2 çalışan ajan · bugün $3 oturum'],
   ['^(\\S+) web calls today$', 'bugün $1 web çağrısı'],
   ['^(\\S+) most-touched today$', 'bugün en çok kullanılan $1 dosya'],
@@ -556,6 +625,15 @@ const menu = {
   'Window': 'Pencere',
   'Minimize': 'Simge Durumuna Küçült',
   'End This Terminal': 'Bu Terminali Bitir',
+  // The tray icon's menu and tooltip (tray.js).
+  'Open the dashboard': 'Panoyu aç',
+  'Waiting for you': 'Seni bekliyor',
+  'Your turn': 'Sıra sende',
+  'Working': 'Çalışıyor',
+  'waiting for you': 'seni bekliyor',
+  'working': 'çalışıyor',
+  'your turn': 'sıra sende',
+  'Quit VoxPilot': "VoxPilot'tan çık",
 };
 
 const dict = { exact, patterns };

@@ -306,16 +306,29 @@ window.Cloud = (() => {
     tellModal(true);
     root.className = 'on';
     root.innerHTML = `
-      <div class="mn-wrap"><div class="pk hk menu crt-on">
+      <div class="mn-wrap"><div class="pk hk menu set crt-on">
         <div class="pk-border"></div>
-        <div class="pk-title"><span class="lights"><i class="l-close" title="Close"></i><i class="l-min"></i><i class="l-max"></i></span><img class="hk-logo" src="logo.png" alt=""><b>MAIN MENU</b></div>
-        <div class="mn-tabs">
-          <button type="button" data-tab="settings">SETTINGS</button>
-          ${KEYS ? '<button type="button" data-tab="keys">SHORTCUTS</button>' : ''}
-        </div>
+        <nav class="set-nav" aria-label="Settings sections">
+          <div class="set-brand"><img class="hk-logo" src="logo.png" alt=""><b>Settings</b></div>
+          <div class="mn-tabs">
+            <button type="button" data-tab="settings">${SET_ICONS.settings}<span>General</span></button>
+            ${UI ? `<button type="button" data-tab="themes">${SET_ICONS.themes}<span>Themes</span></button>` : ''}
+            ${UI ? `<button type="button" data-tab="shortcuts">${SET_ICONS.shortcuts}<span>Shortcuts</span></button>` : ''}
+            ${KEYS ? `<button type="button" data-tab="keys">${SET_ICONS.keys}<span>App keys</span></button>` : ''}
+          </div>
+          <div class="set-ver"></div>
+        </nav>
+        <div class="set-main">
+        <header class="set-head"><div><b class="set-title"></b><small class="set-sub"></small></div>
+          <button type="button" class="set-close" title="Close (esc)" aria-label="Close">×</button></header>
         <div class="mn-body">
           <section class="mn-page mn-settings" data-page="settings">
-            ${UI ? `<div class="hk-h">INTERFACE</div>
+            ${UI ? `<div class="ins" hidden><div class="hk-h">INSTRUCTIONS</div>
+            <textarea class="ins-text" spellcheck="false" aria-label="Instructions" placeholder="What every AI session you open should know, e.g.&#10;Answer in Turkish. Explain the plan before changing code. Never push without asking."></textarea>
+            <div class="ins-foot"><span class="ins-note"></span><span class="ins-count"></span></div>
+            <div class="hk-row"><span>give them to the AI sessions<small>every session gets them, wherever you open it: VoxPilot, VS Code or any terminal, and the ones other programs start too · off takes them out of every tool</small><small class="ins-tools"></small></span>
+              <button type="button" class="hk-sw ins-on" role="switch" aria-checked="true" title="Give the instructions to the AI sessions"><i></i></button></div></div>
+            <div class="hk-h">INTERFACE</div>
             <div class="hk-row"><span>language<small>the interface's language · the app restarts, your chats keep running</small></span><span class="lb-seg ui-seg ui-lang"></span></div>
             <div class="hk-row"><span>font<small>the dashboard's and the messages' text</small></span><span class="lb-seg ui-seg ui-font"></span></div>
             <div class="hk-row"><span>text size<small>the dashboard, larger for text too small to read</small></span><span class="lb-seg ui-seg ui-scale"></span></div>
@@ -324,7 +337,9 @@ window.Cloud = (() => {
             <div class="hk-row"><span>AI tools in the theme's colours<small>Claude Code, Codex and Antigravity draw in the terminal's colours, so a theme recolours their text too · from their next session</small></span>
               <button type="button" class="hk-sw ui-ai" role="switch" aria-checked="true" title="AI tools in the theme's colours"><i></i></button></div>
             <div class="hk-row"><span>Claude limits in the top bar<small>the 5-hour and weekly limits · adds VoxPilot's status line to Claude Code's settings.json, your own status line still runs through it</small></span>
-              <button type="button" class="hk-sw ui-lim" role="switch" aria-checked="false" title="Claude limits in the top bar"><i></i></button></div>` : ''}
+              <button type="button" class="hk-sw ui-lim" role="switch" aria-checked="false" title="Claude limits in the top bar"><i></i></button></div>
+            <div class="hk-row ui-login-row" hidden><span>start with Windows<small>VoxPilot waits in the tray from the moment you sign in · closing the window keeps it there too, right-click its icon to quit</small></span>
+              <button type="button" class="hk-sw ui-login" role="switch" aria-checked="false" title="Start with Windows"><i></i></button></div>` : ''}
             ${SAVERS ? `<div class="hk-h">TOKEN SAVERS</div>
             <div class="hk-row ts-row"><span>rtk · shorter command output for Claude Code, Codex and Antigravity<small class="ts-note" data-which="rtk">…</small></span>
               <button type="button" class="hk-sw ts" data-which="rtk" role="switch" aria-checked="false" title="Turn rtk on or off"><i></i></button></div>
@@ -336,16 +351,17 @@ window.Cloud = (() => {
             <div class="hk-h">APP</div>
             <div class="hk-info"></div>
           </section>
+          <section class="mn-page mn-themes" data-page="themes"></section>
+          <section class="mn-page mn-slash" data-page="shortcuts"></section>
           ${KEYS ? '<section class="mn-page mn-keys" data-page="keys"></section>' : ''}
         </div>
-        <div class="pk-foot"><span class="pk-sel note">esc to close</span><button class="pk-cancel">close</button></div>
+        </div>
       </div></div>`;
 
     q('.mn-settings .arc-open')?.addEventListener('click', openArchive);
 
     root.querySelectorAll('.mn-tabs button').forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
-    q('.l-close').onclick = close;
-    q('.pk-cancel').onclick = close;
+    q('.set-close').onclick = close;
     root.onmousedown = (e) => {
       if (e.target === root) close();
       else if (!e.target.closest('.mn-pick, .mn-status')) q('.mn-pick')?.remove();
@@ -433,11 +449,32 @@ window.Cloud = (() => {
     signed_out: 'pick a hacker name first',
   };
 
+  // Settings' sections: the left column's icons, and each one's title and line under it.
+  const icon = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+  const SET_ICONS = {
+    settings: icon('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>'),
+    themes: icon('<path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.9 1.4-1.9-.5-1.2.3-2.4 1.6-2.4H17a4 4 0 0 0 4-4c0-5.2-4-9.7-9-9.7z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="11" cy="7" r="1.2"/><circle cx="16" cy="8.5" r="1.2"/>'),
+    shortcuts: icon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/>'),
+    keys: icon('<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>'),
+  };
+  const SET_HEADS = {
+    settings: ['General', 'your instructions, the interface, terminals, token savers and chats'],
+    themes: ['Themes', 'point to try · click to keep · terminals too, the orbit map keeps its colours'],
+    shortcuts: ['Shortcuts', "Claude Code's commands on top of its terminal window · the first nine are Ctrl+1…9"],
+    keys: ['App keys', "the keys of the app's actions"],
+  };
+
   function showTab(which) {
+    if (!SET_HEADS[which] || !q(`.mn-page[data-page="${which}"]`)) which = 'settings';
+    if (tab === 'themes' && which !== 'themes') theme('revert').catch(() => {});
     tab = which;
     root.querySelectorAll('.mn-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === which));
     root.querySelectorAll('.mn-page').forEach((p) => (p.hidden = p.dataset.page !== which));
+    setText(q('.set-title'), SET_HEADS[which][0]);
+    setText(q('.set-sub'), SET_HEADS[which][1]);
     if (which === 'keys') renderKeys();
+    if (which === 'themes') themeGrid(q('.mn-themes'), () => modal === 'menu' && tab === 'themes');
+    if (which === 'shortcuts') renderSlash();
     if (which === 'settings') {
       renderSaver();
       renderUI();
@@ -527,6 +564,12 @@ window.Cloud = (() => {
       }
       ai.disabled = false;
     }
+    // Starting with Windows: only where the app says it can (the installed app on Windows).
+    const login = q('.ui-login'), loginRow = q('.ui-login-row');
+    if (login && loginRow) {
+      loginRow.hidden = typeof ui.login !== 'boolean';
+      login.setAttribute('aria-checked', ui.login === true ? 'true' : 'false');
+    }
   }
   // What a new terminal starts (starter.js, Windows): a plain shell, an AI tool installed here, or the user's command.
   function showStarter(st) {
@@ -561,9 +604,139 @@ window.Cloud = (() => {
     showStarter(await uiCall({ type: 'starter' }).catch(() => null));
   }
 
+  // Settings · Shortcuts: Claude Code's command strip (slash.js keeps it, terminal.js shows it). Each row: on the strip,
+  // the command, its label, typed or sent at once, its keys (Ctrl+1…9 by place), up, down and off. Kept as it's edited.
+  let slashList = null;
+  const saveSlash = async (list) => {
+    const r = await uiCall({ type: 'setSlash', shortcuts: list }).catch(() => null);
+    if (r && r.shortcuts) slashList = r.shortcuts;
+    paintSlash();
+  };
+  async function renderSlash() {
+    const page = q('.mn-slash');
+    if (!page) return;
+    if (!slashList) {
+      const r = await uiCall({ type: 'slash' }).catch(() => null);
+      if (!r || !r.shortcuts) return setHTML(page, '<div class="mn-empty">not in this build</div>');
+      slashList = r.shortcuts;
+    }
+    paintSlash();
+  }
+  function paintSlash() {
+    const page = q('.mn-slash');
+    if (!page || !slashList) return;
+    let n = 0;
+    const rows = slashList.map((s, i) => {
+      const key = s.on && n < 9 ? `Ctrl+${++n}` : '—';
+      return (
+        `<div class="sl-row${s.on ? '' : ' off'}" data-i="${i}">` +
+        `<button type="button" class="hk-sw sl-on" role="switch" aria-checked="${s.on}" title="On the strip"><i></i></button>` +
+        `<input class="sl-cmd" value="${esc(s.cmd)}" maxlength="300" spellcheck="false" autocomplete="off" aria-label="Command" placeholder="/command">` +
+        `<input class="sl-label" value="${esc(s.label)}" maxlength="40" spellcheck="false" autocomplete="off" aria-label="Label" placeholder="label">` +
+        `<span class="lb-seg ui-seg sl-mode"><button type="button" data-send="0" class="${s.send ? '' : 'on'}" title="Typed into Claude's prompt, you press Enter">type</button>` +
+        `<button type="button" data-send="1" class="${s.send ? 'on' : ''}" title="Typed and sent at once">send</button></span>` +
+        `<kbd class="sl-key">${key}</kbd>` +
+        `<span class="sl-move"><button type="button" class="sl-up" title="Up"${i ? '' : ' disabled'}>↑</button>` +
+        `<button type="button" class="sl-down" title="Down"${i < slashList.length - 1 ? '' : ' disabled'}>↓</button>` +
+        '<button type="button" class="sl-del" title="Remove">✕</button></span></div>'
+      );
+    });
+    page.innerHTML =
+      '<div class="sl-cols"><span>strip</span><span>command</span><span>label</span><span>on click</span><span>keys</span><span></span></div>' +
+      (rows.length ? rows.join('') : '<div class="mn-empty">no shortcuts · add one</div>') +
+      '<div class="sl-foot"><button type="button" class="sl-add">+ add shortcut</button><span class="gap"></span><button type="button" class="sl-reset">back to the defaults</button></div>';
+    page.onclick = onSlashClick;
+    page.onchange = (e) => {
+      const row = e.target.closest('.sl-row');
+      if (!row) return;
+      const s = slashList[Number(row.dataset.i)];
+      if (e.target.classList.contains('sl-cmd')) {
+        const v = e.target.value.trim();
+        if (!v) return paintSlash();
+        s.cmd = v.startsWith('/') ? v : `/${v}`;
+      } else if (e.target.classList.contains('sl-label')) s.label = e.target.value.trim();
+      saveSlash(slashList);
+    };
+    page.onkeydown = (e) => {
+      if (e.key === 'Enter' && e.target.matches('input')) e.target.blur();
+    };
+  }
+  async function onSlashClick(e) {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.classList.contains('sl-add')) {
+      slashList.push({ cmd: '/', label: '', send: false, on: true });
+      paintSlash();
+      const ins = q('.mn-slash').querySelectorAll('.sl-cmd');
+      const last = ins[ins.length - 1];
+      last.focus();
+      last.setSelectionRange(1, 1);
+      return;
+    }
+    if (b.classList.contains('sl-reset')) {
+      const r = await uiCall({ type: 'resetSlash' }).catch(() => null);
+      if (r && r.shortcuts) slashList = r.shortcuts;
+      return paintSlash();
+    }
+    const row = b.closest('.sl-row');
+    if (!row) return;
+    const i = Number(row.dataset.i), s = slashList[i];
+    if (b.classList.contains('sl-on')) s.on = !s.on;
+    else if (b.dataset.send) s.send = b.dataset.send === '1';
+    else if (b.classList.contains('sl-del')) slashList.splice(i, 1);
+    else if (b.classList.contains('sl-up') || b.classList.contains('sl-down')) {
+      const j = i + (b.classList.contains('sl-up') ? -1 : 1);
+      [slashList[i], slashList[j]] = [slashList[j], slashList[i]];
+    } else return;
+    // A new row still "/" is only kept once it has a command.
+    saveSlash(slashList.filter((x) => x.cmd && x.cmd !== '/'));
+  }
+
+  // Settings · General · Instructions (instructions.js): the user's text for every AI session they open, kept as it's
+  // typed (a moment after the last key), with the switch and where Claude Code gets it.
+  let insTimer = 0;
+  function showInstructions(st) {
+    const box = q('.ins');
+    if (!st || typeof st.text !== 'string' || !box) return;
+    box.hidden = false;
+    const ta = q('.ins-text');
+    ta.maxLength = st.max;
+    if (document.activeElement !== ta) ta.value = st.text;
+    const sw = q('.ins-on');
+    sw.setAttribute('aria-checked', String(st.on));
+    setText(q('.ins-tools'), st.tools.length ? `from their next session · ${st.tools.join(', ')}` : 'no AI tool found on this PC');
+    setText(q('.ins-count'), `${ta.value.length} / ${st.max}`);
+  }
+  async function renderInstructions() {
+    const ta = q('.ins-text');
+    if (!ta) return;
+    const say = (t) => setText(q('.ins-note'), t);
+    const keep = async () => {
+      clearTimeout(insTimer);
+      insTimer = 0;
+      const st = await uiCall({ type: 'setInstructions', text: ta.value }).catch(() => null);
+      if (st) say(st.on ? (st.text.trim() ? 'saved · new sessions get it' : 'empty · nothing is given') : 'saved · off');
+      showInstructions(st);
+    };
+    ta.oninput = () => {
+      setText(q('.ins-count'), `${ta.value.length} / ${ta.maxLength}`);
+      say('…');
+      clearTimeout(insTimer);
+      insTimer = setTimeout(keep, 700);
+    };
+    ta.onblur = () => insTimer && keep();
+    q('.ins-on').onclick = async (e) => {
+      const on = e.currentTarget.getAttribute('aria-checked') !== 'true';
+      showInstructions(await uiCall({ type: 'setInstructions', on }).catch(() => null));
+      say(on ? 'on · new sessions get it' : 'off · taken out of every AI tool');
+    };
+    showInstructions(await uiCall({ type: 'instructions' }).catch(() => null));
+  }
+
   async function renderUI() {
     if (!UI || !q('.ui-font')) return;
     renderStarter();
+    renderInstructions();
     const langEl = q('.ui-lang');
     if (langEl) {
       langEl.onclick = async (e) => {
@@ -577,6 +750,14 @@ window.Cloud = (() => {
         lim.disabled = true;
         showUI(await uiCall({ type: 'setUI', limits: lim.getAttribute('aria-checked') !== 'true' }).catch(() => null));
         lim.disabled = false;
+      };
+    }
+    const login = q('.ui-login');
+    if (login) {
+      login.onclick = async () => {
+        login.disabled = true;
+        showUI(await uiCall({ type: 'setUI', login: login.getAttribute('aria-checked') !== 'true' }).catch(() => null));
+        login.disabled = false;
       };
     }
     showUI(await uiCall({ type: 'ui' }).catch(() => null));
@@ -1152,10 +1333,37 @@ window.Cloud = (() => {
 
   // Settings: the version and its updates. They download by themselves and go in when you step away (or at once, with
   // the switch); "check for updates" asks now, "update now" shows what's new and restarts into it.
+  // Settings · General · App: the version and its updates (GitHub releases, main.js). They download by themselves and go
+  // in when you step away (or at once, with the switch); "check for updates" asks now, "update now" shows what's new and
+  // restarts into it.
   function renderInfo() {
+    setText(q('.set-ver'), `VoxPilot ${S.version || '?'}`);
     const el = q('.hk-info');
     if (!el) return;
-    setHTML(el, `<div class="hk-row"><span>version</span><div class="hk-val"><b>${esc(S.version || '?')}</b></div></div>`);
+    const status = S.updating
+      ? `<em>${esc(S.updating + pct())}</em>`
+      : S.update
+        ? `<em>${esc(S.update.version)} ${S.updateReady ? 'ready · installs when you step away' : `is out · downloading${pct()}`}</em>`
+        : S.updateError
+          ? `<em class="bad">update failed · try again</em>`
+          : S.checking
+            ? '<em class="dim">checking…</em>'
+            : S.checkedAt
+              ? `<em class="dim">up to date · checked ${ago(S.checkedAt)}</em>`
+              : '';
+    setHTML(
+      el,
+      `<div class="hk-row"><span>version</span><div class="hk-val"><b>${esc(S.version || '?')}</b>${status}</div></div>` +
+        '<div class="hk-row"><span>updates<small>from GitHub · they download by themselves and install when you step away · your chats keep running</small></span><div class="hk-val">' +
+        `<button type="button" class="hk-upd hk-check"${S.checking || S.updating ? ' disabled' : ''}>check for updates</button>` +
+        `${S.update && !S.updating ? '<button type="button" class="hk-upd hk-now">update now</button>' : ''}</div></div>` +
+        `<div class="hk-row"><span>install updates right away<small>off: an update waits until you're away for 10 minutes</small></span>` +
+        `<button type="button" class="hk-sw upd" role="switch" aria-checked="${!!S.updateRightAway}" title="Install updates as soon as they're downloaded"><i></i></button></div>`,
+    );
+    el.querySelector('.hk-check').onclick = () => call('checkUpdate').then((s) => s && render(s)).catch(() => toast(errorText('offline')));
+    const now = el.querySelector('.hk-now');
+    if (now) now.onclick = openUpdate;
+    el.querySelector('.hk-sw.upd').onclick = () => call('updateRightAway', { on: !S.updateRightAway }).then((s) => s && render(s));
   }
 
 
@@ -1193,14 +1401,16 @@ window.Cloud = (() => {
   // The themes view: each theme as a small picture of the app in its own colours. Pointing at one, or moving to it with
   // the arrow keys, shows the whole app in it at once; a click (or ↩) keeps it; leaving the cards or the view goes back
   // to the kept one.
-  async function openThemes() {
-    const el = views.themes;
+  const openThemes = () => themeGrid(views.themes, () => shown === 'themes', true);
+  // The cards in `el` (Settings' Themes, or the old view with its panel around them, `panel`), while `alive()`.
+  async function themeGrid(el, alive, panel) {
     const list = await themeList();
-    if (shown !== 'themes') return;
-    if (!list || !list.themes) return setHTML(el, `<section class="panel cv-themes"><header><span class="tag">themes</span></header><div class="mn-empty">themes didn't load</div></section>`);
-    el.innerHTML =
-      `<section class="panel cv-themes"><header><span class="tag">themes</span><span class="meta">${list.themes.length} themes · point to try · click to keep · the orbit map keeps its colours</span></header>` +
-      `<div class="body th-grid">${list.themes.map((t) => themeCard(t, list.chosen)).join('')}</div></section>`;
+    if (!el || !alive()) return;
+    if (!list || !list.themes) return setHTML(el, `<div class="mn-empty">themes didn't load</div>`);
+    const grid = `<div class="body th-grid">${list.themes.map((t) => themeCard(t, list.chosen)).join('')}</div>`;
+    el.innerHTML = panel
+      ? `<section class="panel cv-themes"><header><span class="tag">themes</span><span class="meta">${list.themes.length} themes · point to try · click to keep · the orbit map keeps its colours</span></header>${grid}</section>`
+      : grid;
     const cards = [...el.querySelectorAll('.th-card')];
     let timer = 0;
     themeAt = -1;
@@ -1356,6 +1566,8 @@ window.Cloud = (() => {
 
   function close() {
     if (!modal) return;
+    // A theme being tried in Settings goes back to the kept one.
+    if (modal === 'menu' && tab === 'themes') theme('revert').catch(() => {});
     modal = null;
     tellModal(false);
     root.onmousedown = null;

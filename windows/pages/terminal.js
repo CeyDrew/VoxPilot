@@ -50,6 +50,137 @@
   term.onData((data) => atl.send('term:input', data));
   // The AI tool running in this window, as the app tells it (term:info), for the keys it needs.
   let tool = null;
+  // Claude Code's command strip (Settings · Shortcuts): a chip per shortcut while Claude runs here; a click, or Ctrl+1…9
+  // for the first nine, types the command into Claude's prompt, and sends it too when the shortcut says so.
+  const strip = document.getElementById('cmds');
+  let cuts = [], stripKey = '';
+  const fire = (i) => {
+    const s = cuts[i];
+    if (!s || strip.hidden) return false;
+    term.focus();
+    atl.send('term:input', s.cmd);
+    // Enter a moment later, as a key of its own: Claude takes a command and its Enter in one write as pasted text.
+    if (s.send) setTimeout(() => atl.send('term:input', '\r'), 120);
+    const chip = strip.querySelector(`[data-i="${i}"]`);
+    if (chip) {
+      chip.classList.add('fired');
+      setTimeout(() => chip.classList.remove('fired'), 450);
+    }
+    return true;
+  };
+  const showStrip = (on, list) => {
+    const key = on ? JSON.stringify(list) : '';
+    if (key === stripKey) return;
+    stripKey = key;
+    cuts = on ? list : [];
+    strip.hidden = !on;
+    strip.textContent = '';
+    if (!on) return refit();
+    cuts.forEach((s, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.i = i;
+      b.className = s.send ? 'send' : '';
+      b.title = s.cmd + (s.send ? ' · sent at once' : ' · typed, Enter to send');
+      b.append(s.label);
+      if (i < 9) {
+        const k = document.createElement('kbd');
+        k.textContent = `Ctrl+${i + 1}`;
+        b.append(k);
+      }
+      b.onclick = () => fire(i);
+      strip.append(b);
+    });
+    const gap = document.createElement('span');
+    gap.className = 'gap';
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'add';
+    add.textContent = '+ add';
+    add.title = 'Add a shortcut (Settings · Shortcuts)';
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'edit';
+    edit.textContent = 'customize';
+    edit.title = 'Edit the shortcuts (Settings · Shortcuts)';
+    add.onclick = edit.onclick = () => atl.send('term:settings');
+    strip.append(more, gap, add, edit);
+    refit();
+    layoutStrip();
+  };
+  strip.addEventListener('mousedown', (e) => e.preventDefault());
+  // What doesn't fit on the strip (a narrow window, many shortcuts) goes under its "⋯ N more" button, in a list that
+  // opens below it; "+ add" goes there too. The keys stay as they are.
+  const more = document.createElement('button');
+  more.type = 'button';
+  more.className = 'more';
+  more.hidden = true;
+  const menu = document.getElementById('cmds-menu');
+  const closeMenu = () => {
+    menu.hidden = true;
+    more.classList.remove('open');
+  };
+  const layoutStrip = () => {
+    closeMenu();
+    if (strip.hidden) return;
+    const chips = [...strip.querySelectorAll('button[data-i]')];
+    const add = strip.querySelector('.add');
+    for (const c of chips) c.hidden = false;
+    more.hidden = true;
+    if (add) add.hidden = false;
+    if (strip.scrollWidth <= strip.clientWidth) return;
+    if (add) add.hidden = true;
+    more.hidden = false;
+    let shown = chips.length;
+    do {
+      more.textContent = `⋯ ${chips.length - shown + 1} more`;
+      chips[--shown].hidden = true;
+    } while (shown > 0 && strip.scrollWidth > strip.clientWidth);
+    more.textContent = `⋯ ${chips.length - shown} more`;
+  };
+  new ResizeObserver(() => layoutStrip()).observe(strip);
+  more.onclick = () => {
+    if (!menu.hidden) return closeMenu();
+    menu.textContent = '';
+    for (const c of strip.querySelectorAll('button[data-i][hidden]')) {
+      const i = Number(c.dataset.i), s = cuts[i];
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = s.send ? 'send' : '';
+      b.title = c.title;
+      const name = document.createElement('span');
+      name.textContent = s.label;
+      b.append(name);
+      if (i < 9) {
+        const k = document.createElement('kbd');
+        k.textContent = `Ctrl+${i + 1}`;
+        b.append(k);
+      }
+      b.onclick = () => {
+        closeMenu();
+        fire(i);
+      };
+      menu.append(b);
+    }
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'add';
+    add.textContent = '+ add';
+    add.onclick = () => {
+      closeMenu();
+      atl.send('term:settings');
+    };
+    menu.append(add);
+    const r = more.getBoundingClientRect();
+    menu.style.top = `${Math.round(r.bottom + 4)}px`;
+    menu.style.left = `${Math.round(Math.min(r.left, innerWidth - 220))}px`;
+    menu.hidden = false;
+    more.classList.add('open');
+  };
+  menu.addEventListener('mousedown', (e) => e.preventDefault());
+  // Anywhere else, or the window going to the back, closes it (Esc is Claude's: it would stop its work).
+  addEventListener('mousedown', (e) => !menu.hidden && !menu.contains(e.target) && e.target !== more && closeMenu(), true);
+  addEventListener('blur', closeMenu);
   // Copy-on-select, as on the Mac: dragging or double-clicking a selection copies it to the clipboard on mouse release,
   // shows the "COPIED N CHARS" badge in the HUD, and keeps the selection highlighted.
   let mouseDown = false, pendingCopy = false, copyTimer = 0;
@@ -104,6 +235,11 @@
   term.attachCustomKeyEventHandler((e) => {
     if (e.type !== 'keydown' || !e.ctrlKey || e.altKey) return true;
     const k = e.key.toLowerCase();
+    // Ctrl+1…9: the command strip's shortcuts, while Claude Code runs here.
+    if (!e.shiftKey && /^Digit[1-9]$/.test(e.code) && fire(Number(e.code.slice(5)) - 1)) {
+      e.preventDefault();
+      return false;
+    }
     if (k === 'c' && term.hasSelection()) {
       e.preventDefault();
       copySelection();
@@ -122,6 +258,7 @@
   const STATUS = { busy: ['WORKING', '--accent'], idle: ['YOUR TURN', '--cyan'], waiting: ['NEEDS YOU', '--warn'], terminal: ['TERMINAL', '--cyan'], ended: ['ENDED', '--ended'] };
   atl.on('term:info', (i) => {
     tool = i.tool || null;
+    showStrip(!!i.claude && i.status !== 'ended', i.shortcuts || []);
     document.getElementById('title').textContent = i.title || 'terminal';
     document.title = `${i.title || 'terminal'} · VoxPilot`;
     const [label, color] = STATUS[i.status] || ['', '--dim'];

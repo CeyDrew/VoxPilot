@@ -1,5 +1,15 @@
 # Değişiklikler
 
+## 1.2.7
+
+- Ayarlar yeni düzende: solda Genel, Temalar ve Kısayollar. Temalar sol menüden Ayarlar'a taşındı.
+- Claude Code açık terminalin üstünde komut şeridi: /compact, /clear, /review… Tıkla ya da Ctrl+1…9. Komutlar, adları, yaz ya da hemen gönder ve sıraları Ayarlar · Kısayollar'dan değişir. Şeride sığmayanlar "⋯ N daha" düğmesinin altında.
+- Ayarlar · Genel · Talimatlar: yazdıkların açtığın yapay zekâ oturumlarına verilir (Claude Code, Codex, Gemini ve Antigravity; nerede açılırsa açılsın). Yeni oturumlardan itibaren geçerli.
+- VoxPilot tepside: pencereyi kapatınca uygulama saatin yanındaki simgede çalışmaya devam eder, seni bekleyen oturumu haber verir. Simgedeki nokta durumu gösterir (seni bekleyen varsa kırmızı yanıp söner). Tıkla: pano gelir ya da gider. Sağ tık: panoyu aç, oturumlar durumlarına göre alt alta (seni bekliyor, sıra sende, çalışıyor; tıklayınca terminali açılır), çık.
+- Ayarlar · Genel · Windows ile başlat: oturum açınca VoxPilot tepside başlar.
+- Uygulama yeniden açılınca terminallerde tıklamanın kayması düzeldi (kısayol şeridi gelince yeni boyut kayboluyordu).
+- Güncellemeler GitHub'dan: yeni sürüm kendiliğinden iner, sen uzaklaşınca ya da "şimdi güncelle" ile kurulur. Ayarlar · Genel · Uygulama: güncellemeleri denetle ve güncellemeleri hemen kur geri geldi.
+
 ## 1.2.6
 
 - Yeni terminal klasöründe ne başlatacağını seçebiliyorsun (Ayarlar · Arayüz · yeni terminal başlatır): boş terminal, bilgisayarda kurulu yapay zekâ araçlarından biri (Claude Code, Codex, Gemini, Aider…) ya da kendi komutun. Varsayılan: Claude Code kuruluysa o, değilse boş terminal. Shift + yeni terminal her zaman boş terminal açar.

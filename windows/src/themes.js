@@ -22,7 +22,7 @@ const FALLBACK_ANSI = ['#1b2420', '#ff5c6c', '#2bc46a', '#f2d35b', '#7c6cff', '#
  * `onChange(css)`: the theme the app shows changed (a preview, a choice, back to the chosen one, the interface's font);
  * `onScale(factor)`: the interface's size changed (the dashboard's zoom).
  */
-function createThemes({ webDir, settings, onChange, onScale, ai, limits, langs, defaultLang, onLang }) {
+function createThemes({ webDir, settings, onChange, onScale, ai, limits, login, langs, defaultLang, onLang }) {
   const lang = () => ((langs || []).some((l) => l.id === settings.get('lang')) ? settings.get('lang') : defaultLang || 'en');
   let list = [];
   try {
@@ -43,6 +43,8 @@ function createThemes({ webDir, settings, onChange, onScale, ai, limits, langs, 
   const uiScale = () => (UI_SCALES.includes(settings.get('uiScale')) ? settings.get('uiScale') : 1);
   const uiJSON = () => ({
     font: uiFont().id, scale: uiScale(), fonts: UI_FONTS.map(({ id, name }) => ({ id, name })), scales: UI_SCALES, aiColors: ai ? ai.isOn() : false, limits: settings.get('limitsOn') === true, lang: lang(), langs: langs || [],
+    // Starting with Windows (main.js): the installed app on Windows only; the page shows its switch when it's here.
+    ...(login ? { login: login.get() } : {}),
   });
   let current = list.find((t) => t.id === chosenId());
 
@@ -109,6 +111,10 @@ function createThemes({ webDir, settings, onChange, onScale, ai, limits, langs, 
             settings.set('limitsOn', body.limits);
             if (body.limits) limits.install();
             else limits.uninstall();
+            return uiJSON();
+          }
+          if (login && typeof body.login === 'boolean') {
+            login.set(body.login);
             return uiJSON();
           }
           if (ai && typeof body.aiColors === 'boolean') {

@@ -14,3 +14,29 @@ body { display: flex; flex-direction: column; overflow: hidden; background: var(
 #hud #end:hover { border-color: var(--red, #ff4d4d); color: var(--red, #ff4d4d); }
 #term { flex: 1; min-height: 0; padding: 6px 4px 4px 8px; }
 .xterm .xterm-viewport { scrollbar-color: rgba(var(--accent-rgb, 248, 128, 8), 0.35) transparent; }
+/* Claude Code's command strip: a chip per shortcut (Ctrl+1…9), then add and edit (Settings · Shortcuts). */
+#cmds { display: flex; align-items: center; gap: 6px; flex: none; padding: 6px 10px; overflow-x: auto; border-bottom: 1px solid rgba(var(--accent-rgb, 248, 128, 8), 0.16); background: rgba(0, 0, 0, 0.18); scrollbar-width: none; }
+#cmds[hidden] { display: none; }
+#cmds button { display: flex; flex: none; align-items: center; gap: 7px; height: 26px; padding: 0 5px 0 11px; border: 1px solid rgba(var(--accent-rgb, 248, 128, 8), 0.32); border-radius: 13px; background: rgba(var(--accent-rgb, 248, 128, 8), 0.08); color: var(--accent-pale, var(--hi, #fff8f0)); font: inherit; cursor: pointer; }
+#cmds button:hover { border-color: var(--accent, #f88008); background: rgba(var(--accent-rgb, 248, 128, 8), 0.18); }
+#cmds button.fired { border-color: var(--accent, #f88008); background: var(--accent, #f88008); color: var(--ink, #1a0d00); }
+#cmds button.send::after { content: "↵"; color: var(--dim, #8f7a66); font-size: 10px; }
+#cmds button.fired.send::after { color: inherit; }
+#cmds kbd { padding: 1px 5px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); color: var(--dim, #8f7a66); font: inherit; font-size: 10px; }
+#cmds button.fired kbd { background: rgba(0, 0, 0, 0.18); color: inherit; }
+#cmds .gap { flex: 1; }
+#cmds button.add, #cmds button.edit { padding: 0 11px; border-style: dashed; background: transparent; color: var(--accent-soft, #ffb057); }
+#cmds button.edit { border-style: solid; border-color: transparent; color: var(--dim, #8f7a66); }
+#cmds button.edit:hover { color: var(--hi, #fff8f0); }
+#cmds button[hidden] { display: none; }
+#cmds button.more { padding: 0 11px; background: transparent; color: var(--accent-soft, #ffb057); }
+#cmds button.more.open { border-color: var(--accent, #f88008); background: rgba(var(--accent-rgb, 248, 128, 8), 0.18); }
+/* The strip's overflow: a list below its "more" button. */
+#cmds-menu { position: fixed; z-index: 20; display: flex; flex-direction: column; gap: 2px; min-width: 200px; padding: 5px; border: 1px solid rgba(var(--accent-rgb, 248, 128, 8), 0.45); border-radius: 8px; background: var(--code-bg, #251200); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55); }
+#cmds-menu[hidden] { display: none; }
+#cmds-menu button { display: flex; align-items: center; gap: 14px; height: 28px; padding: 0 8px 0 10px; border: 0; border-radius: 5px; background: transparent; color: var(--accent-pale, var(--hi, #fff8f0)); font: inherit; text-align: left; cursor: pointer; }
+#cmds-menu button span { flex: 1; }
+#cmds-menu button:hover { background: rgba(var(--accent-rgb, 248, 128, 8), 0.16); }
+#cmds-menu button.send span::after { content: " ↵"; color: var(--dim, #8f7a66); font-size: 10px; }
+#cmds-menu kbd { padding: 1px 5px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); color: var(--dim, #8f7a66); font: inherit; font-size: 10px; }
+#cmds-menu button.add { color: var(--accent-soft, #ffb057); }

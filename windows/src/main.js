@@ -22,9 +22,12 @@ const { createTerminals, which } = require('./terminals');
 const { createOverlay } = require('./overlay');
 const { createRunaways } = require('./runaways');
 const { createStarter } = require('./starter');
+const { createSlash } = require('./slash');
+const { createInstructions } = require('./instructions');
 const { createSavers } = require('./savers');
 const { createChatList } = require('./chatlist');
 const { createLimits } = require('./limits');
+const { createTray } = require('./tray');
 const i18n = require('./i18n');
 // The interface's language (Settings; Turkish unless the user picked English), and a string of the app's own in it.
 const lang = () => (i18n.LANGS.some((l) => l.id === settings.get('lang')) ? settings.get('lang') : i18n.DEFAULT_LANG);
@@ -73,6 +76,24 @@ const settings = (() => {
   };
 })();
 
+// ---------- the tray, and starting with Windows ----------
+// The app stays in the notification area when the dashboard is closed (src/tray.js); only Quit ends it.
+let tray = null;
+// Started with Windows (Settings · start with Windows): the tray icon only, the dashboard waits for a click.
+let startHidden = process.argv.includes('--hidden');
+// When the dashboard last lost the keys: a click on the tray icon takes them first, so it was in front just before.
+let dashBlurAt = 0;
+// Settings' "start with Windows": the installed app only (a development run would register Electron itself).
+const LOGIN_ARGS = ['--hidden'];
+const loginItem = process.platform === 'win32' && app.isPackaged
+  ? {
+    get: () => app.getLoginItemSettings({ args: LOGIN_ARGS }).openAtLogin === true,
+    set(on) {
+      app.setLoginItemSettings({ openAtLogin: !!on, args: LOGIN_ARGS });
+    },
+  }
+  : null;
+
 // ---------- the parts ----------
 // The dashboard window: the chats list beside the dashboard's page, as the Mac's split view has them (two views, so
 // each page is as wide as its part of the window).
@@ -86,6 +107,8 @@ const panels = { notices: null, chats: new Map(), showing: new Set() }; // the m
 // the terminal's 16 colours.
 // What a new terminal starts in its folder (Settings · Interface).
 const starter = createStarter({ settings });
+// The command strip of a Claude Code window (Settings · Shortcuts).
+const slash = createSlash({ settings });
 let plainNext = false; // Shift on + new terminal: the folder picked next gets a plain shell
 
 const aiColors = createAIColors({
@@ -104,6 +127,7 @@ const themes = createThemes({
     app.exit(0);
   },
   limits: { install: () => limits.install(), uninstall: () => limits.uninstall() },
+  login: loginItem,
   ai: aiColors,
   webDir: WEB,
   settings,
@@ -122,6 +146,15 @@ const themes = createThemes({
 
 // The token savers (rtk, caveman), shipped next to the dashboard's files; run from the sources, rtk is the one
 // scripts/fetch-rtk.js put in vendor/ and caveman the Mac app's.
+// The user's instructions for the AI sessions (Settings · General).
+const instructions = createInstructions({
+  settings,
+  ownDir: path.join(process.env.LOCALAPPDATA || app.getPath('appData'), 'voxpilot'),
+  claudeDir: process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'),
+  codexDir: process.env.CODEX_HOME || path.join(os.homedir(), '.codex'),
+  home: os.homedir(),
+});
+
 const savers = createSavers({
   settings,
   ownDir: path.join(process.env.LOCALAPPDATA || app.getPath('appData'), 'voxpilot'),
@@ -173,9 +206,10 @@ function profileSuffix() {
 
 // Closing the dashboard keeps the app and its chats going, as on the Mac, where the Dock brings it back (here, starting
 // the app again). With no chat or terminal left there's nothing to keep it for: it quits rather than stay on out of
-// sight (the hidden notices panel would keep it alive, and the uninstaller would find it running).
+// sight (the hidden notices panel would keep it alive, and the uninstaller would find it running). With the tray icon
+// it stays there instead, and only its Quit ends it.
 function quitIfIdle() {
-  if (!quitting && !dash && !terminals.list().length) app.quit();
+  if (!quitting && !tray && !dash && !terminals.list().length) app.quit();
 }
 
 // Claude's 5-hour and weekly limits: Claude Code's status line hands its JSON to a script of ours (src/limits.js).
@@ -200,6 +234,7 @@ const engine = createEngine({
     pushActiveSession();
     for (const [id, c] of chats) send(c.win, 'term:info', chatInfo(id, c));
     badge();
+    if (tray) tray.update(engine.live());
     updateWaits();
     pushWinOpen();
     pushChats();
@@ -438,6 +473,8 @@ function createDashboard() {
     if (shown || win.isDestroyed()) return;
     shown = true;
     if (PROBE) return win.showInactive();
+    // Started with Windows: it waits in the tray.
+    if (startHidden && tray) return void (startHidden = false);
     win.show();
     dashView.webContents.focus();
   };
@@ -450,10 +487,20 @@ function createDashboard() {
   win.on('focus', tellFocus);
   win.on('blur', () => setImmediate(tellFocus));
   // Closing the dashboard leaves the chats and terminals open: let them go before it closes, or Windows closes its
-  // child windows with it.
-  win.on('close', () => {
+  // child windows with it. With the tray icon it only goes out of sight, to come back as it was; Quit (the tray's menu,
+  // Ctrl+Q) or Windows signing out closes it.
+  win.on('close', (e) => {
     for (const c of win.getChildWindows()) if (!c.isDestroyed()) c.setParentWindow(null);
+    if (quitting || !tray) return;
+    e.preventDefault();
+    win.hide();
+    if (!settings.get('trayHinted')) {
+      settings.set('trayHinted', true);
+      tray.hint(T('VoxPilot is still running'), T('It stays in the tray and tells you when a session waits for you. Right-click its icon to quit.'));
+    }
   });
+  win.on('session-end', () => (quitting = true));
+  win.on('blur', () => (dashBlurAt = Date.now()));
   win.on('closed', () => {
     // A window's views don't go with it: their pages close here.
     for (const v of views) if (!v.webContents.isDestroyed()) v.webContents.close();
@@ -690,6 +737,13 @@ function showDashboard() {
   if (!chatsView.webContents.isFocused()) dashView.webContents.focus();
 }
 
+// The tray icon's click: the dashboard comes forward, or, when it was already in front, goes back to the tray.
+function toggleDashboard() {
+  const front = dash && dash.isVisible() && !dash.isMinimized() && (dash.isFocused() || Date.now() - dashBlurAt < 400);
+  if (front) dash.close();
+  else showDashboard();
+}
+
 // ---------- the dashboard's requests (the "radar" handler) ----------
 function handleRadar(msg) {
   switch (msg.type) {
@@ -794,7 +848,15 @@ function chatInfo(id, c) {
   const status = !terminals.has(id) ? 'ended' : s ? s.status : starting ? 'busy' : 'terminal';
   // Another AI tool running in it (Codex, Antigravity…): the page leaves it the keys it needs (terminal.js).
   const tool = engine.live().find((x) => x.ai && x.tab === id);
-  return { title: (s && s.name) || c.title, status: status === 'shell' ? 'idle' : status, cwd: tildify(c.cwd), tool: tool ? tool.name : null };
+  // Claude Code in it: its live session, or a chat started with Claude that hasn't shown one yet (its session comes with
+  // the first message); one seen and gone again means Claude exited.
+  if (s) c.claudeSeen = true;
+  const claude = !tool && status !== 'ended' && (!!s || (c.claude && !c.claudeSeen));
+  return {
+    title: (s && s.name) || c.title, status: status === 'shell' ? 'idle' : status, cwd: tildify(c.cwd), tool: tool ? tool.name : null,
+    // The window shows the command strip while Claude Code runs in it.
+    claude, shortcuts: slash.shown(),
+  };
 }
 
 const tildify = (p) => (p && p.startsWith(os.homedir()) ? '~' + p.slice(os.homedir().length) : p || '');
@@ -1131,6 +1193,11 @@ ipcMain.on('term:copy', (e, text) => {
   if (chatOf(e) && typeof text === 'string' && text) clipboard.writeText(text);
 });
 ipcMain.on('term:dashboard', () => showDashboard());
+// The command strip's edit button: Settings · Shortcuts, over the dashboard.
+ipcMain.on('term:settings', () => {
+  showDashboard();
+  toDash("openSettings('shortcuts')");
+});
 ipcMain.on('term:open', (_e, uri) => {
   if (typeof uri !== 'string') return;
   const clean = uri.trim().replace(/^['"<]+|['">.,;:!?)]+$/g, '');
@@ -1480,7 +1547,7 @@ function handleMessages(win, body) {
   }
 }
 
-// ---------- updates: the releases repo's "windows" release (electron-updater; scripts/release.js) ----------
+// ---------- updates: the GitHub repo's latest release (electron-updater; scripts/release.js puts it out) ----------
 // A new version downloads by itself and goes in, as on the Mac, when the user has stepped away for 10 minutes (or wants
 // updates right away) and the restart stops nothing: chats in the session host go on across it. One running in the app
 // itself (no host) would end, so then it waits for the user's quit (or "update now").
@@ -1493,10 +1560,10 @@ const updates = (() => {
   // starts): it goes in the moment the download is done, as on the Mac, rather than waiting for the user to step away
   // while the page says "downloading…" with no way out.
   let whenReady = false;
-  // No release channel of VoxPilot's own yet, so nothing is looked for or downloaded: an update from another app's
-  // feed must never install over it. Give package.json a "publish" feed of its own before turning this on.
-  const UPDATES_ON = false;
-  const usable = UPDATES_ON && !!autoUpdater && app.isPackaged && !PROBE;
+  // The feed is package.json's "publish": the GitHub repo's latest release (its installer, blockmap and latest.yml).
+  // VOXPILOT_UPDATE_FEED points a packaged app at another folder of those (a local server, to try an update out).
+  const testFeed = (process.env.VOXPILOT_UPDATE_FEED || '').replace(/\/+$/, '');
+  const usable = !!autoUpdater && app.isPackaged && !PROBE;
   const rightAway = () => !!settings.get('updateRightAway');
   const maybeRestart = () => {
     if (!ready || busy || terminals.list().some((t) => terminals.local(t.id))) return;
@@ -1509,6 +1576,7 @@ const updates = (() => {
     setImmediate(() => autoUpdater.quitAndInstall(true, true));
   };
   if (usable) {
+    if (testFeed) autoUpdater.setFeedURL({ provider: 'generic', url: testFeed });
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.on('update-available', (i) => {
@@ -1544,22 +1612,24 @@ const updates = (() => {
     });
     const look = () => poll().catch(() => {});
     setTimeout(look, 10_000);
-    setInterval(look, 60_000);
+    setInterval(look, 15 * 60_000);
     // Back from sleep or the lock screen: at once, not at the next minute.
     powerMonitor.on('resume', look);
     powerMonitor.on('unlock-screen', look);
     setInterval(maybeRestart, 60_000);
   }
 
-  // A new release shows within a minute of going out, as on the Mac (whose heartbeat asks the API every minute; it was
-  // every 30 minutes here, so a release could wait half an hour to be seen): the feed's latest.yml, about 1 KB, is read
-  // every minute with a time limit, and electron-updater only asked when it names a newer version than this one and the
-  // one on offer, so its notice comes once.
+  // A new release shows within 15 minutes of going out (and at launch, and back from sleep): the feed's latest.yml,
+  // about 1 KB, is read with a time limit, and electron-updater only asked when it names a newer version than this one
+  // and the one on offer, so its notice comes once. GitHub's "latest/download" always leads to the newest release's.
   const feed = (() => {
     if (!usable) return null;
+    if (testFeed) return testFeed;
     try {
-      const m = /^url:\s*(.+)$/m.exec(fs.readFileSync(path.join(process.resourcesPath, 'app-update.yml'), 'utf8'));
-      return m ? m[1].trim().replace(/^['"]|['"]$/g, '').replace(/\/+$/, '') : null;
+      const yml = fs.readFileSync(path.join(process.resourcesPath, 'app-update.yml'), 'utf8');
+      const val = (k) => ((new RegExp(`^${k}:\\s*(.+)$`, 'm').exec(yml) || [])[1] || '').trim().replace(/^['"]|['"]$/g, '');
+      if (val('provider') === 'github' && val('owner') && val('repo')) return `https://github.com/${val('owner')}/${val('repo')}/releases/latest/download`;
+      return val('url').replace(/\/+$/, '') || null;
     } catch {
       return null;
     }
@@ -1680,6 +1750,14 @@ ipcMain.handle('atl:post', async (e, name, body) => {
       case 'theme':
         if (body.type === 'starter') return starter.state();
         if (body.type === 'setStarter') return starter.set(body);
+        if (body.type === 'slash') return slash.list();
+        if (body.type === 'instructions') return instructions.state();
+        if (body.type === 'setInstructions') return instructions.set(body);
+        if (body.type === 'setSlash' || body.type === 'resetSlash') {
+          const r = body.type === 'setSlash' ? slash.set(body.shortcuts) : slash.reset();
+          for (const [id, c] of chats) send(c.win, 'term:info', chatInfo(id, c));
+          return r;
+        }
         return themes.handle(body);
       case 'messages':
         return handleMessages(win, body);
@@ -1799,6 +1877,24 @@ app.on('second-instance', () => showDashboard());
 app.whenReady().then(() => {
   if (PROBE && app.dock) app.dock.hide();
   buildMenu();
+  if (process.platform === 'win32' && !PROBE) {
+    tray = createTray({
+      T: TM,
+      onToggle: toggleDashboard,
+      onShow: showDashboard,
+      // A session from its menu: its window in front, or the terminal it runs in outside the app.
+      onOpen: (sid) => openWait(sid),
+      onQuit: () => app.quit(),
+      // Its name as its card has it (or the one the user gave it), then Claude's title for it; never the last prompt.
+      // Another AI tool: its name and folder.
+      title: (s) => {
+        const folder = path.basename(s.cwd || '') || s.cwd || '';
+        if (s.ai) return clip(`${s.name} · ${folder}`, 60);
+        const name = chatlist.title(s.sessionId) || s.name || folder;
+        return clip(name, 40) + (s.title && s.title !== name ? `  ·  ${clip(s.title, 48)}` : '');
+      },
+    });
+  }
   createDashboard();
   // Only the app's usual profile hooks Claude Code's settings: a profile of its own (npm run staging) leaves them be.
   // Claude's limits in the top bar need a status line in Claude Code's own settings.json: only once the user has turned
@@ -1820,6 +1916,7 @@ app.whenReady().then(() => {
   // The token savers this build ships go on by themselves the first time (Settings turns them off).
   savers.autoStart();
   if (!PROBE) aiColors.autoStart();
+  if (!PROBE) instructions.apply();
   powerMonitor.on('resume', () => cloud.kick());
   // On battery the dashboard's map draws fewer and smaller frames, as on the Mac (PowerSaver.swift).
   powerMonitor.on('on-battery', () => toDash('power(true)'));
@@ -1849,6 +1946,12 @@ app.on('before-quit', (e) => {
   engine.stop();
   runaways.stop();
   cloud.stop();
+});
+
+// The icon goes with the app, or Windows keeps it in the tray until the mouse passes over it.
+app.on('will-quit', () => {
+  if (tray) tray.destroy();
+  tray = null;
 });
 
 app.on('window-all-closed', () => {
