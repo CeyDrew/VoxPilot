@@ -49,6 +49,8 @@
 .vt-pane { position: relative; flex: 1; min-height: 0; }
 .vt-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--dim); text-align: center; }
 .vt-empty[hidden] { display: none; }
+.vt-still { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+.vt-still[hidden] { display: none; }
 .vt-empty b { color: var(--hi); }
 .vt-cover { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--accent); background: rgba(var(--accent-rgb), 0.08); }
 .vt-cover[hidden] { display: none; }

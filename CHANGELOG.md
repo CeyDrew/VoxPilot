@@ -1,5 +1,10 @@
 # Değişiklikler
 
+## 1.2.10
+
+- Ayarlar açıkken sekmedeki terminal kaybolmuyor: o anki görüntüsü ayarların arkasında bulanık görünür, ayarlar kapanınca terminal yerine gelir.
+- Kendi penceresindeki terminal ayarlar kapanınca yeniden önde açılıyor (panonun arkasında kalıyordu).
+
 ## 1.2.9
 
 - Terminaller panonun ortasında sekmelerde: üst sağdaki yörünge ve terminaller ikonlarıyla harita ve terminaller yer değiştirir. Yeni terminal, oturum kartına tıklama, tepsideki ve köşedeki bildirimler terminali sekmede açar.

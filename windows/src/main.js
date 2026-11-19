@@ -517,6 +517,7 @@ function createDashboard() {
     for (const v of views) if (!v.webContents.isDestroyed()) v.webContents.close();
     if (dash === win) dash = dashView = chatsView = null;
     tabShown = null;
+    stillShown = false;
     tabs.rect = tabs.strip = tabs.area = null;
     clearInterval(chatsList.timer);
     chatsList.timer = null;
@@ -841,6 +842,8 @@ function stepAside(open) {
       c.steppedAside = false;
       pinToDash(c.win);
       c.win.showInactive();
+      // Given back to the dashboard while hidden, Windows shows it where it was in the stack: under the dashboard.
+      c.win.moveTop();
     }
   }
   for (const w of panels.chats.values()) {
@@ -853,9 +856,11 @@ function stepAside(open) {
       w.steppedAside = false;
       pinToDash(w);
       w.showInactive();
+      w.moveTop();
     }
   }
-  layoutTabs();
+  if (open) holdTab();
+  else layoutTabs();
   return true;
 }
 
@@ -1079,6 +1084,39 @@ function showChat(id, { dock = false, index } = {}) {
 // in windows outlive the app (settings.tabs), as the session host's terminals do.
 const tabs = { order: [], active: null, rect: null, strip: null, mids: [], area: null, drop: null };
 let tabShown = null; // the view on the dashboard
+let stillShown = false; // the page shows a picture of the tab in front (a menu is over it)
+let stillHold = false; // the tab in front stays on while its picture is taken
+
+// A menu opening on the dashboard: a view is always above the page, so the tab in front can't stay under the menu's
+// veil. A picture of it takes its place on the pane first, then it steps out; it comes back when the menu closes.
+function holdTab() {
+  const v = tabShown;
+  if (!v || v.webContents.isDestroyed() || !dashView || dashView.webContents.isDestroyed()) return layoutTabs();
+  stillHold = true;
+  let done = false;
+  const go = () => {
+    if (done) return;
+    done = true;
+    stillHold = false;
+    layoutTabs();
+  };
+  setTimeout(go, 300);
+  v.webContents
+    .capturePage()
+    .then((img) => {
+      if (done || !modalOpen || img.isEmpty() || !dashView || dashView.webContents.isDestroyed()) return;
+      stillShown = true;
+      const url = `data:image/jpeg;base64,${img.toJPEG(88).toString('base64')}`;
+      return dashView.webContents.executeJavaScript(`window.Tabs ? Tabs.still(${JSON.stringify(url)}) : null`);
+    })
+    .catch(() => {})
+    .finally(go);
+}
+function dropStill() {
+  if (!stillShown) return;
+  stillShown = false;
+  run(dashView, 'window.Tabs && Tabs.still(null)');
+}
 
 /** A tab (at `index`, else where it was or last), in front (`activate`), the dashboard brought up for it (`reveal`). */
 function dockTerm(id, { index, activate = true, reveal = true } = {}) {
@@ -1192,6 +1230,7 @@ function focusTab() {
  */
 function layoutTabs() {
   if (!dash || dash.isDestroyed() || !dashView) return void (tabShown = null);
+  if (stillHold) return;
   const c = tabs.active && chats.get(tabs.active);
   const r = tabs.rect;
   const want = c && c.place === 'tab' && c.loaded && !c.resting && !c.view.webContents.isDestroyed() && r && !modalOpen ? c.view : null;
@@ -1199,7 +1238,11 @@ function layoutTabs() {
     dash.contentView.removeChildView(tabShown);
     tabShown = null;
   }
-  if (!want) return;
+  if (!want) {
+    // The menu's picture of the tab goes once there's no tab to come back to it.
+    if (!modalOpen && !(c && c.place === 'tab' && !c.view.webContents.isDestroyed())) dropStill();
+    return;
+  }
   if (tabShown !== want) {
     dash.contentView.addChildView(want);
     tabShown = want;
@@ -1219,6 +1262,7 @@ function layoutTabs() {
       }, 150);
     }
   }
+  if (tabShown === want) dropStill();
   const off = dashView.getBounds(), z = dashView.webContents.getZoomFactor() || 1;
   const x = Math.round(off.x + r.x * z), y = Math.round(off.y + r.y * z);
   want.setBounds({ x, y, width: Math.max(1, Math.round(off.x + (r.x + r.w) * z) - x), height: Math.max(1, Math.round(off.y + (r.y + r.h) * z) - y) });

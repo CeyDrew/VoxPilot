@@ -41,11 +41,12 @@ window.Tabs = (() => {
     '<nav class="vt-strip" role="tablist" aria-label="Terminal tabs">' +
     '<div class="vt-tabs"></div><i class="vt-mark" hidden></i></nav>' +
     '<div class="vt-pane"><div class="vt-empty" hidden><b>no open tabs</b><span>Click a session card or drag one here.</span></div>' +
-    '<div class="vt-cover" hidden><span></span></div></div>';
+    '<img class="vt-still" alt="" hidden><div class="vt-cover" hidden><span></span></div></div>';
   wrap.append(root, sw);
   const strip = root.querySelector('.vt-strip'), list = root.querySelector('.vt-tabs'), mark = root.querySelector('.vt-mark');
   const meta = root.querySelector('.vt-meta');
   const pane = root.querySelector('.vt-pane'), empty = root.querySelector('.vt-empty'), cover = root.querySelector('.vt-cover');
+  const still = root.querySelector('.vt-still');
   const ghost = document.createElement('div');
   ghost.id = 'vt-ghost';
   ghost.hidden = true;
@@ -323,5 +324,17 @@ window.Tabs = (() => {
       render();
     },
     view: setView,
+    // A picture of the terminal in front, while a menu is over the pane and the app has taken the terminal off; null
+    // takes it away. Resolves once it's ready to paint, so the terminal steps out only then.
+    still(url) {
+      if (!url) {
+        still.hidden = true;
+        still.removeAttribute('src');
+        return null;
+      }
+      still.src = url;
+      still.hidden = false;
+      return still.decode().catch(() => {});
+    },
   };
 })();
